@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Extra Life Donation Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Bungee&family=Roboto+Mono&family=VT323&family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background-color: #0d0d0d;
+        color: #fff;
+        font-family: 'Press Start 2P', cursive;
+        margin: 0;
+        padding: 0;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      #root.config-mode {
+        padding: 20px;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+      }
+    </style>
+    <!-- Babel Standalone to compile TSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "socket.io-client": "https://esm.sh/socket.io-client@4.7.4",
+    "express": "https://aistudiocdn.com/express@^5.1.0",
+    "http": "https://aistudiocdn.com/http@^0.0.1-security",
+    "socket.io": "https://aistudiocdn.com/socket.io@^4.8.1",
+    "node-fetch": "https://aistudiocdn.com/node-fetch@^3.3.2",
+    "cors": "https://aistudiocdn.com/cors@^2.8.5",
+    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@jest/globals": "https://aistudiocdn.com/@jest/globals@^30.2.0",
+    "os": "https://aistudiocdn.com/os@^0.1.2",
+    "tmi.js": "https://aistudiocdn.com/tmi.js@^1.8.5",
+    "lowdb/": "https://aistudiocdn.com/lowdb@^7.0.1/",
+    "lowdb": "https://aistudiocdn.com/lowdb@^7.0.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <!-- Type is text/babel and data-type=module to allow imports + JSX -->
+    <script type="text/babel" data-type="module" data-presets="react,typescript" src="index.tsx"></script>
+  </body>
+</html>
