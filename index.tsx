@@ -19,6 +19,13 @@ const translations = {
     teamId: "Team ID",
     refreshSeconds: "Refresh (seconds)",
     currency: "Currency",
+    exchangeRate: "Exchange Rate",
+    customExchangeRate: "Custom Exchange Rate Multiplier",
+    customRateHelp: "Direct multiplier (leave blank for live rate)",
+    websiteTotalLabel: "Or Calculate from Extra Life Website Total (CAD)",
+    websiteTotalHelp: "Enter current CAD total shown on Extra Life to auto-calculate rate",
+    calculatedRateNotice: "Calculated using your API total of ${usd} USD",
+    refreshRate: "Refresh",
     twitchIntegration: "Twitch Integration",
     twitchEnabled: "Enable Twitch Integration",
     twitchChannel: "Channel Name",
@@ -172,6 +179,13 @@ const translations = {
     teamId: "ID Équipe",
     refreshSeconds: "Rafraîchissement (secondes)",
     currency: "Devise",
+    exchangeRate: "Taux de change",
+    customExchangeRate: "Multiplicateur de taux personnalisé",
+    customRateHelp: "Multiplicateur direct (laisser vide pour le taux en direct)",
+    websiteTotalLabel: "Ou calculer via le total du site Extra Life (CAD)",
+    websiteTotalHelp: "Entrez le montant CAD sur Extra Life pour calculer le taux",
+    calculatedRateNotice: "Calculé avec votre total API de {usd} $ USD",
+    refreshRate: "Actualiser",
     twitchIntegration: "Intégration Twitch",
     twitchEnabled: "Activer Intégration Twitch",
     twitchChannel: "Nom de la chaîne",
@@ -987,6 +1001,7 @@ const App = () => {
     useParticipantTeamId: false,
     refreshInterval: 60,
     currency: 'USD',
+    customExchangeRate: 0,
     eventStartTime: '',
     celebrationDuration: 15,
     language: 'en',
@@ -1032,6 +1047,7 @@ const App = () => {
   const [teamIdInput, setTeamIdInput] = useState('');
   const [commandTrigger, setCommandTrigger] = useState('');
   const [commandResponse, setCommandResponse] = useState('');
+  const [websiteTotalInput, setWebsiteTotalInput] = useState('');
 
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   
@@ -1128,12 +1144,87 @@ const App = () => {
     return text;
   }, [config.language]);
 
+  // Currency Exchange Rate Fetcher with multi-tiered fallbacks
+  const fetchConversionRate = useCallback(async (_forceRefresh = false): Promise<number> => {
+      const currentConf = configRef.current;
+      if (currentConf.currency !== 'CAD') {
+          setConversionRate(1.0);
+          return 1.0;
+      }
+
+      // 1. User manual override if configured
+      const customRate = Number(currentConf.customExchangeRate);
+      if (customRate && !isNaN(customRate) && customRate > 0) {
+          setConversionRate(customRate);
+          return customRate;
+      }
+
+      // 2. Primary endpoint: open.er-api.com
+      try {
+          const res = await fetch('https://open.er-api.com/v6/latest/USD');
+          if (res.ok) {
+              const data = await res.json();
+              const rate = Number(data?.rates?.CAD);
+              if (rate && !isNaN(rate) && rate > 0.5) {
+                  setConversionRate(rate);
+                  return rate;
+              }
+          }
+      } catch (e) {
+          console.warn('Primary exchange rate endpoint notice:', e);
+      }
+
+      // 3. Fallback: exchangerate-api.com v4
+      try {
+          const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          if (res.ok) {
+              const data = await res.json();
+              const rate = Number(data?.rates?.CAD);
+              if (rate && !isNaN(rate) && rate > 0.5) {
+                  setConversionRate(rate);
+                  return rate;
+              }
+          }
+      } catch (e) {}
+
+      // 4. Sensible CAD fallback rate (~1.36) so conversion ALWAYS works even completely offline
+      const fallbackRate = 1.36;
+      setConversionRate(prev => (prev && prev > 1 ? prev : fallbackRate));
+      return fallbackRate;
+  }, []);
+
+  const effectiveRate = useMemo(() => {
+      if (config.currency !== 'CAD') return 1.0;
+      const custom = Number(config.customExchangeRate);
+      if (custom && !isNaN(custom) && custom > 0) return custom;
+      return conversionRate > 1 ? conversionRate : 1.36;
+  }, [config.currency, config.customExchangeRate, conversionRate]);
+
   const convertAmount = useCallback((amount: number) => {
     if (config.currency === 'CAD') {
-      return amount * conversionRate;
+      return amount * effectiveRate;
     }
     return amount;
-  }, [config.currency, conversionRate]);
+  }, [config.currency, effectiveRate]);
+
+  // Automatically fetch & broadcast conversion rate when CAD is active
+  useEffect(() => {
+      if (config.currency === 'CAD') {
+          fetchConversionRate().then(rate => {
+              const stored = loadStoredData(currentProfileRef.current) || {};
+              const updated = { ...stored, conversionRate: rate };
+              saveStoredData(currentProfileRef.current, updated);
+              try {
+                  syncChannelRef.current?.postMessage({
+                      type: 'data-updated',
+                      payload: updated
+                  });
+              } catch (e) {}
+          });
+      } else {
+          setConversionRate(1.0);
+      }
+  }, [config.currency, config.customExchangeRate, fetchConversionRate]);
 
   const sortedDonations = useMemo(() => {
     return [...donations].sort((a, b) => new Date(b.createdDateUTC).getTime() - new Date(a.createdDateUTC).getTime());
@@ -1399,15 +1490,9 @@ const App = () => {
           }
 
           // 5. Currency Rate (optional)
-          let cRate = conversionRateRef.current;
+          let cRate = effectiveRate;
           if (currentConf.currency === 'CAD') {
-              try {
-                  const rateRes = await fetch('https://open.er-api.com/v6/latest/USD');
-                  if (rateRes.ok) {
-                      const rateData = await rateRes.json();
-                      if (rateData?.rates?.CAD) cRate = rateData.rates.CAD;
-                  }
-              } catch (e) {}
+              cRate = await fetchConversionRate();
           }
 
           // Check for new donations
@@ -1552,7 +1637,7 @@ const App = () => {
 
               const currentConf = configRef.current;
               const prefix = currentConf.currency === 'USD' ? '$' : 'C$';
-              const rate = currentConf.currency === 'CAD' ? conversionRate : 1;
+              const rate = currentConf.currency === 'CAD' ? effectiveRate : 1;
 
               if (msg === '!total') {
                   const amt = (totalRaised * rate).toFixed(2);
@@ -1915,7 +2000,7 @@ const App = () => {
                       goal,
                       teamTotalRaised,
                       teamName,
-                      conversionRate
+                      conversionRate: effectiveRate
                   }
               });
           } catch (e) {}
@@ -2471,6 +2556,79 @@ const App = () => {
                                 <option value="USD">USD ($)</option>
                                 <option value="CAD">CAD (C$)</option>
                             </select>
+
+                            {config.currency === 'CAD' && (
+                                <div style={{ marginTop: '8px', marginBottom: '14px', padding: '10px', backgroundColor: hexToRgba(config.panelBorderColor, 0.1), border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}` }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '0.85rem', color: config.accentColor2 }}>
+                                            {t('exchangeRate')}: <strong>1 USD = {effectiveRate.toFixed(4)} CAD</strong>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setWebsiteTotalInput('');
+                                                updateConfig({ customExchangeRate: 0 });
+                                                fetchConversionRate(true);
+                                            }}
+                                            style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.accentColor2 }}
+                                            title="Reset to live API exchange rate"
+                                        >
+                                            ↻ {t('refreshRate')} (Live)
+                                        </button>
+                                    </div>
+
+                                    {/* Box 1: Direct Custom Exchange Rate Multiplier */}
+                                    <label style={{ ...styles.label, fontSize: '0.75rem', margin: '6px 0 3px 0' }}>
+                                        {t('customExchangeRate')} ({t('customRateHelp')})
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        value={config.customExchangeRate === 0 || !config.customExchangeRate ? '' : config.customExchangeRate}
+                                        placeholder={`Live rate (~${conversionRate > 1 ? conversionRate.toFixed(4) : '1.36'})`}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setWebsiteTotalInput('');
+                                            updateConfig({ customExchangeRate: val === '' ? 0 : parseFloat(val) });
+                                        }}
+                                        style={{ ...styles.input, marginBottom: '10px', fontSize: '0.85rem', padding: '6px' }}
+                                    />
+
+                                    {/* Box 2: Calculate from Current Extra Life Website Total */}
+                                    <label style={{ ...styles.label, fontSize: '0.75rem', margin: '4px 0 3px 0' }}>
+                                        {t('websiteTotalLabel')}
+                                    </label>
+                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.85rem', color: config.textColor, opacity: 0.8, fontWeight: 'bold' }}>C$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={websiteTotalInput}
+                                            placeholder={totalRaised > 0 ? (totalRaised * effectiveRate).toFixed(2) : (goal > 0 ? (goal * effectiveRate).toFixed(2) : 'e.g. 138.45')}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setWebsiteTotalInput(val);
+                                                const parsedCad = parseFloat(val);
+                                                const baseUsd = totalRaised > 0 ? totalRaised : goal;
+                                                if (!isNaN(parsedCad) && parsedCad > 0 && baseUsd > 0) {
+                                                    const calculated = parseFloat((parsedCad / baseUsd).toFixed(4));
+                                                    updateConfig({ customExchangeRate: calculated });
+                                                } else if (val === '') {
+                                                    updateConfig({ customExchangeRate: 0 });
+                                                }
+                                            }}
+                                            style={{ ...styles.input, marginBottom: 0, fontSize: '0.85rem', padding: '6px', flex: 1 }}
+                                        />
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: config.accentColor2, opacity: 0.85, marginTop: '5px' }}>
+                                        {totalRaised > 0 
+                                            ? `${t('calculatedRateNotice', { usd: totalRaised.toFixed(2) })}`
+                                            : (goal > 0 
+                                                ? `${t('calculatedRateNotice', { usd: goal.toFixed(2) })}`
+                                                : t('websiteTotalHelp'))}
+                                    </div>
+                                </div>
+                            )}
                             </CollapsibleSection>
                             
                             <CollapsibleSection title={t('twitchIntegration')} isInitiallyCollapsed={true} styles={styles}>

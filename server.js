@@ -271,6 +271,7 @@ const DEFAULT_CONFIG = {
     useParticipantTeamId: false,
     refreshInterval: 60,
     currency: 'USD',
+    customExchangeRate: 0,
     eventStartTime: '',
     celebrationDuration: 15,
     language: 'en',
@@ -454,7 +455,22 @@ export async function setupProfileTwitchClient(profile) {
 
 async function fetchProfileConversionRate(profile) {
     if (profile.config.currency === 'CAD') {
-         profile.data.conversionRate = 1.35; 
+         if (profile.config.customExchangeRate && Number(profile.config.customExchangeRate) > 0) {
+             profile.data.conversionRate = Number(profile.config.customExchangeRate);
+             return;
+         }
+         try {
+             const res = await fetch('https://open.er-api.com/v6/latest/USD');
+             if (res.ok) {
+                 const d = await res.json();
+                 if (d?.rates?.CAD) {
+                     profile.data.conversionRate = d.rates.CAD;
+                     return;
+                 }
+             }
+         } catch (e) {}
+
+         profile.data.conversionRate = 1.36; 
     } else {
         profile.data.conversionRate = 1.0;
     }

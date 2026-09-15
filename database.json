@@ -6,6 +6,7 @@
       "useParticipantTeamId": true,
       "refreshInterval": 360,
       "currency": "USD",
+      "customExchangeRate": 0,
       "eventStartTime": "",
       "celebrationDuration": 15,
       "language": "en",
