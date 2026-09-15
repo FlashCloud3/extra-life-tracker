@@ -600,7 +600,8 @@ function startProfilePolling(profile) {
     if (profile.pollingInterval) clearInterval(profile.pollingInterval);
     // Initial fetch
     fetchProfileData(profile);
-    profile.pollingInterval = setInterval(() => fetchProfileData(profile), profile.config.refreshInterval * 1000);
+    const intervalSecs = Math.max(1, Number(profile.config.refreshInterval) || 60);
+    profile.pollingInterval = setInterval(() => fetchProfileData(profile), intervalSecs * 1000);
 }
 
 

@@ -899,7 +899,7 @@ const App = () => {
   };
 
   // === CONSTANTS ===
-  const MIN_REFRESH_INTERVAL = 15; 
+  const MIN_REFRESH_INTERVAL = 1; 
   const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
   const SERVER_URL = window.location.origin; 
   const MAX_VISIBLE_TOASTS = 4;
@@ -1041,10 +1041,22 @@ const App = () => {
   const soundFileInputRef = useRef<HTMLInputElement>(null);
   const configRef = useRef(config);
 
-  // Sync configRef with state
+  // Sync configRef and runtime refs with state
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  const totalRaisedRef = useRef(totalRaised);
+  useEffect(() => { totalRaisedRef.current = totalRaised; }, [totalRaised]);
+
+  const conversionRateRef = useRef(conversionRate);
+  useEffect(() => { conversionRateRef.current = conversionRate; }, [conversionRate]);
+
+  const currentProfileRef = useRef(currentProfile);
+  useEffect(() => { currentProfileRef.current = currentProfile; }, [currentProfile]);
+
+  const lastFetchTimeRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   // Handle OAuth Redirect from Twitch
   useEffect(() => {
@@ -1347,6 +1359,9 @@ const App = () => {
       const pid = currentConf.participantId;
       if (!pid) return;
 
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+
       try {
           // 1. Participant Details (Use dd.extra-life.org for CORS compliance on GitHub Pages)
           const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}`);
@@ -1384,7 +1399,7 @@ const App = () => {
           }
 
           // 5. Currency Rate (optional)
-          let cRate = conversionRate;
+          let cRate = conversionRateRef.current;
           if (currentConf.currency === 'CAD') {
               try {
                   const rateRes = await fetch('https://open.er-api.com/v6/latest/USD');
@@ -1409,6 +1424,8 @@ const App = () => {
 
           const newRaised = partData.sumDonations || 0;
           const newGoal = partData.fundraisingGoal || 0;
+          const previousTotal = totalRaisedRef.current;
+
           setTotalRaised(newRaised);
           setGoal(newGoal);
           setDonations(donData);
@@ -1426,7 +1443,7 @@ const App = () => {
               teamName: tName,
               conversionRate: cRate
           };
-          saveStoredData(currentProfile, updatedPayload);
+          saveStoredData(currentProfileRef.current, updatedPayload);
           try {
               syncChannelRef.current?.postMessage({ type: 'data-updated', payload: updatedPayload });
           } catch (e) {}
@@ -1455,7 +1472,6 @@ const App = () => {
               });
 
               // Check if milestone or goal was crossed
-              const previousTotal = totalRaised;
               if (previousTotal > 0 && newRaised > previousTotal) {
                   const crossedMilestone = mileData.some((m: Milestone) => previousTotal < m.fundraisingGoal && newRaised >= m.fundraisingGoal);
                   if (crossedMilestone || (newGoal > 0 && previousTotal < newGoal && newRaised >= newGoal)) {
@@ -1470,19 +1486,33 @@ const App = () => {
                   }
               }
           }
+
+          lastFetchTimeRef.current = Date.now();
       } catch (err) {
           console.warn('Extra Life client-side fetch notice:', err);
+      } finally {
+          isFetchingRef.current = false;
       }
-  }, [currentProfile, conversionRate, totalRaised, playSpecificSound]);
+  }, [playSpecificSound]);
 
   // Periodic polling in Standalone Mode or in Overlays
   useEffect(() => {
       if (!isStandaloneMode && overlayType === 'none' && socketRef.current?.connected) return;
       if (!config.participantId) return;
 
-      fetchClientSideData();
-      const intervalMs = Math.max(MIN_REFRESH_INTERVAL, config.refreshInterval || 60) * 1000;
-      const timer = setInterval(fetchClientSideData, intervalMs);
+      const refreshSeconds = Math.max(MIN_REFRESH_INTERVAL, Number(config.refreshInterval) || 60);
+      const intervalMs = refreshSeconds * 1000;
+
+      // Only perform an immediate fetch if we haven't fetched recently or on first mount
+      const elapsed = Date.now() - lastFetchTimeRef.current;
+      if (lastFetchTimeRef.current === 0 || elapsed >= intervalMs) {
+          fetchClientSideData();
+      }
+
+      const timer = setInterval(() => {
+          fetchClientSideData();
+      }, intervalMs);
+
       return () => clearInterval(timer);
   }, [isStandaloneMode, overlayType, config.participantId, config.refreshInterval, fetchClientSideData]);
 
@@ -1782,6 +1812,7 @@ const App = () => {
 
   const handleIdSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    lastFetchTimeRef.current = 0;
     updateConfig({
         participantId: participantIdInput,
         teamId: teamIdInput,
@@ -2421,10 +2452,14 @@ const App = () => {
                             <label style={styles.label}>{t('refreshSeconds')}</label>
                             <input 
                                 type="number" 
-                                value={config.refreshInterval} 
-                                onChange={(e) => updateConfig({ refreshInterval: Number(e.target.value) })} 
+                                value={config.refreshInterval === 0 ? '' : config.refreshInterval} 
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    const parsed = val === '' ? 0 : parseInt(val, 10);
+                                    updateConfig({ refreshInterval: isNaN(parsed) ? 60 : parsed });
+                                }} 
                                 style={styles.input} 
-                                min={15} 
+                                min={1} 
                             />
                             
                             <label style={styles.label}>{t('currency')}</label>
