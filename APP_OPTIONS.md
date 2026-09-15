@@ -172,7 +172,7 @@ The tracker can run completely standalone without a local Node.js server, making
 5. Click **Save**. Within a minute, your tracker will be live at `https://<username>.github.io/<repo-name>/`!
 
 ### Features in Standalone / GitHub Pages Mode
-* **Direct Extra Life API Polling**: Directly queries the official DonorDrive API (`https://www.extra-life.org/api/participants/...`) from the browser every refresh interval.
+* **Direct Extra Life API Polling**: Directly queries the official DonorDrive API (`https://dd.extra-life.org/api/participants/...`) with native CORS support from the browser every refresh interval.
 * **Instant OBS Cross-Tab Sync**: Uses the browser's native `BroadcastChannel` API to synchronize configuration changes, test donations, and clearing commands to all OBS browser source overlays in real-time.
 * **Local Storage & Multiple Profiles**: Configurations for each Participant ID are saved in your browser's `localStorage`.
 * **Profile Backup & Restore**: Export your configuration (theme, schedule, custom audio) as a `.json` file and import it anywhere.

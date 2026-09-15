@@ -1348,8 +1348,8 @@ const App = () => {
       if (!pid) return;
 
       try {
-          // 1. Participant Details
-          const partRes = await fetch(`https://extra-life.org/api/participants/${pid}`);
+          // 1. Participant Details (Use dd.extra-life.org for CORS compliance on GitHub Pages)
+          const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}`);
           if (!partRes.ok) return;
           const partData = await partRes.json();
 
@@ -1362,11 +1362,11 @@ const App = () => {
           }
 
           // 2. Donations
-          const donRes = await fetch(`https://extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+          const donRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
           const donData = donRes.ok ? await donRes.json() : [];
 
           // 3. Milestones
-          const mileRes = await fetch(`https://extra-life.org/api/participants/${pid}/milestones`);
+          const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones`);
           const mileData = mileRes.ok ? await mileRes.json() : [];
 
           // 4. Team Details (optional)
@@ -1374,7 +1374,7 @@ const App = () => {
           let tName = '';
           if (newTeamId) {
               try {
-                  const teamRes = await fetch(`https://extra-life.org/api/teams/${newTeamId}`);
+                  const teamRes = await fetch(`https://dd.extra-life.org/api/teams/${newTeamId}`);
                   if (teamRes.ok) {
                       const tData = await teamRes.json();
                       tRaised = tData.sumDonations || 0;

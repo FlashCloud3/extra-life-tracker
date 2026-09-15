@@ -466,7 +466,7 @@ export async function fetchProfileData(profile) {
     
     try {
         // 1. Participant Data
-        const userRes = await fetch(`https://www.extra-life.org/api/participants/${profile.config.participantId}`);
+        const userRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}`);
         const userJson = await userRes.json();
         
         if (!userJson || !userJson.sumDonations) {
@@ -504,7 +504,7 @@ export async function fetchProfileData(profile) {
         profile.data.goal = newGoal;
 
         // 2. Donations
-        const donationsRes = await fetch(`https://www.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+        const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
         const donationsJson = await donationsRes.json();
         
         if (!Array.isArray(donationsJson)) {
@@ -551,7 +551,7 @@ export async function fetchProfileData(profile) {
         }));
         
         // 3. Milestones
-        const milestonesRes = await fetch(`https://www.extra-life.org/api/participants/${profile.config.participantId}/milestones`);
+        const milestonesRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/milestones`);
         const milestonesJson = await milestonesRes.json();
         if (Array.isArray(milestonesJson)) {
             profile.data.milestones = milestonesJson.sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
@@ -576,7 +576,7 @@ export async function fetchProfileData(profile) {
         }
 
         if (currentTeamId) {
-             const teamRes = await fetch(`https://www.extra-life.org/api/teams/${currentTeamId}`);
+             const teamRes = await fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`);
              const teamJson = await teamRes.json();
              if (teamJson) {
                  profile.data.teamTotalRaised = teamJson.sumDonations || 0;
