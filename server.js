@@ -526,6 +526,7 @@ export async function fetchProfileData(profile) {
                         createdDateUTC: d.createdDateUTC
                     };
                     io.to(`profile:${profile.id}`).emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
+                    io.emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
                     
                     // Twitch Alert
                     if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {

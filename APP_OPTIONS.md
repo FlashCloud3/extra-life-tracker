@@ -157,3 +157,24 @@ You can control the tracker externally (e.g., **Stream Deck**, **Touch Portal**,
 *   **Method:** `POST`
 *   **Content Type:** `application/json`
 *   **Body:** `{ "name": "hacker-green", "profile": "534123" }`
+
+---
+
+## 10. Running Directly on GitHub Pages (Static Hosting)
+
+The tracker can run completely standalone without a local Node.js server, making it ideal for free 24/7 hosting on **GitHub Pages**.
+
+### Deploying to GitHub Pages
+1. Push this repository to GitHub.
+2. In your repository on GitHub, navigate to **Settings** > **Pages**.
+3. Under **Build and deployment** > **Source**, choose **Deploy from a branch**.
+4. Set the branch to `main` (or `master`) and directory to `/(root)`.
+5. Click **Save**. Within a minute, your tracker will be live at `https://<username>.github.io/<repo-name>/`!
+
+### Features in Standalone / GitHub Pages Mode
+* **Direct Extra Life API Polling**: Directly queries the official DonorDrive API (`https://www.extra-life.org/api/participants/...`) from the browser every refresh interval.
+* **Instant OBS Cross-Tab Sync**: Uses the browser's native `BroadcastChannel` API to synchronize configuration changes, test donations, and clearing commands to all OBS browser source overlays in real-time.
+* **Local Storage & Multiple Profiles**: Configurations for each Participant ID are saved in your browser's `localStorage`.
+* **Profile Backup & Restore**: Export your configuration (theme, schedule, custom audio) as a `.json` file and import it anywhere.
+* **In-Browser Twitch Chat Bot**: When enabled with a token, the bot connects directly to Twitch IRC over secure WebSockets via `tmi.js` in the browser to announce donations and reply to commands.
+* **Hybrid Compatibility**: If you run `node server.js` locally, the app will automatically detect and connect to the local server; if no server is running or when hosted on GitHub Pages, it runs in Standalone Mode.

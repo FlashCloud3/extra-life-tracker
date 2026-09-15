@@ -136,7 +136,26 @@ const translations = {
     welcomeSubtitle: "Enter your Participant ID to begin setup.",
     startTracking: "Start Tracking",
     changeId: "Change ID",
-    idHint: "This ID will be used to save your settings and overlays."
+    idHint: "This ID will be used to save your settings and overlays.",
+    githubPagesMode: "GitHub Pages Mode",
+    standaloneMode: "Standalone Client (In-Browser)",
+    connectedServer: "Connected to Server",
+    connecting: "Connecting...",
+    defaultPowerup: "Default Power-Up",
+    defaultLaser: "Default Laser Blaster",
+    exportConfig: "Export Settings (JSON)",
+    importConfig: "Import Settings (JSON)",
+    importSuccess: "Settings loaded successfully!",
+    importError: "Invalid JSON configuration file.",
+    uploadSponsorImage: "Upload Sponsor Logo (File)",
+    sponsorUrl: "Or paste Sponsor Image URL",
+    addSponsorUrl: "Add URL",
+    customText: "Custom Text Content",
+    customTextHint: "Type your stream message, notes, or rules directly here. Displays live on the Text Overlay!",
+    uploadTextFile: "Upload .txt File",
+    directUrl: "Or remote Text URL (e.g. raw GitHub URL)",
+    loadUrl: "Fetch Text",
+    syncNote: "Running directly from GitHub Pages! Overlays, sounds, and settings sync across browser tabs and OBS sources locally."
   },
   fr: {
     appTitle: "Suivi Extra Life",
@@ -270,7 +289,26 @@ const translations = {
     welcomeSubtitle: "Entrez votre ID Participant pour commencer.",
     startTracking: "Commencer le suivi",
     changeId: "Changer ID",
-    idHint: "Cet ID sera utilisé pour sauvegarder vos paramètres et overlays."
+    idHint: "Cet ID sera utilisé pour sauvegarder vos paramètres et overlays.",
+    githubPagesMode: "Mode GitHub Pages",
+    standaloneMode: "Client Autonome (Dans le Navigateur)",
+    connectedServer: "Connecté au Serveur",
+    connecting: "Connexion en cours...",
+    defaultPowerup: "Power-Up par défaut",
+    defaultLaser: "Laser par défaut",
+    exportConfig: "Exporter Paramètres (JSON)",
+    importConfig: "Importer Paramètres (JSON)",
+    importSuccess: "Paramètres chargés avec succès !",
+    importError: "Fichier de configuration JSON invalide.",
+    uploadSponsorImage: "Uploader Logo Sponsor (Fichier)",
+    sponsorUrl: "Ou coller l'URL d'une image",
+    addSponsorUrl: "Ajouter URL",
+    customText: "Contenu texte personnalisé",
+    customTextHint: "Tapez votre message de stream, notes ou règles directement ici. S'affiche en direct sur l'Overlay Texte !",
+    uploadTextFile: "Uploader Fichier .txt",
+    directUrl: "Ou URL de fichier texte distant",
+    loadUrl: "Charger Texte",
+    syncNote: "Exécution directe depuis GitHub Pages ! Overlays, sons et paramètres se synchronisent localement."
   }
 };
 
@@ -524,17 +562,24 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
     );
 };
 
-const TextOverlay = ({ filename, styles, fontFamily, textColor, accentColor1, alignment = 'top-left', fontSize = 1.5 }: any) => {
-    const [content, setContent] = useState('');
+const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, accentColor1, alignment = 'top-left', fontSize = 1.5 }: any) => {
+    const [content, setContent] = useState(customText || '');
 
     useEffect(() => {
+        if (customText) {
+            setContent(customText);
+            return;
+        }
         if (!filename) {
-            setContent('No text file selected');
+            setContent('No text configured');
             return;
         }
 
         const fetchText = () => {
-            fetch(`/api/read-text/${filename}`)
+            const url = (filename.startsWith('http://') || filename.startsWith('https://'))
+                ? filename
+                : `/api/read-text/${filename}`;
+            fetch(url)
                 .then(res => {
                     if (res.ok) return res.text();
                     throw new Error('Failed to read file');
@@ -547,9 +592,9 @@ const TextOverlay = ({ filename, styles, fontFamily, textColor, accentColor1, al
         };
 
         fetchText();
-        const interval = setInterval(fetchText, 2000); // Poll every 2 seconds
+        const interval = setInterval(fetchText, 3000);
         return () => clearInterval(interval);
-    }, [filename]);
+    }, [filename, customText]);
 
     const getAlignmentStyles = () => {
         const style: React.CSSProperties = {
@@ -859,10 +904,45 @@ const App = () => {
   const SERVER_URL = window.location.origin; 
   const MAX_VISIBLE_TOASTS = 4;
   const TWITCH_CLIENT_ID = 'kp59hwgkiqrl7zntjotsnfovrmauoz';
+  const STORAGE_PREFIX = 'extralife_tracker_';
+
+  const isGitHubPagesHost = typeof window !== 'undefined' && (
+      window.location.hostname.endsWith('github.io') || 
+      window.location.protocol === 'file:'
+  );
+
+  const loadStoredConfig = (profileId: string) => {
+      try {
+          const item = localStorage.getItem(`${STORAGE_PREFIX}config_${profileId}`);
+          if (item) return JSON.parse(item);
+      } catch (e) {}
+      return null;
+  };
+  const saveStoredConfig = (profileId: string, cfg: any) => {
+      try {
+          localStorage.setItem(`${STORAGE_PREFIX}config_${profileId}`, JSON.stringify(cfg));
+      } catch (e) {}
+  };
+  const loadStoredData = (profileId: string) => {
+      try {
+          const item = localStorage.getItem(`${STORAGE_PREFIX}data_${profileId}`);
+          if (item) return JSON.parse(item);
+      } catch (e) {}
+      return null;
+  };
+  const saveStoredData = (profileId: string, data: any) => {
+      try {
+          localStorage.setItem(`${STORAGE_PREFIX}data_${profileId}`, JSON.stringify(data));
+      } catch (e) {}
+  };
 
   // === STATE ===
   const [isConnected, setIsConnected] = useState(false);
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(isGitHubPagesHost);
   const socketRef = useRef<Socket | null>(null);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const twitchClientRef = useRef<any>(null);
+  const seenDonationIdsRef = useRef<Set<string>>(new Set());
 
   // Profile
   const [currentProfile, setCurrentProfile] = useState<string>('default');
@@ -886,12 +966,15 @@ const App = () => {
   const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'celebration' | 'schedule' | 'sponsors' | 'text'>('none');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
   const [formError, setFormError] = useState('');
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [timeDisplay, setTimeDisplay] = useState<string>('');
   const [celebrationKey, setCelebrationKey] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [availableSponsorFiles, setAvailableSponsorFiles] = useState<string[]>([]);
   const [selectedSponsorFile, setSelectedSponsorFile] = useState<string>('');
+  const [sponsorUrlInput, setSponsorUrlInput] = useState<string>('');
+  const [sponsorNameInput, setSponsorNameInput] = useState<string>('');
   const [availableSoundFiles, setAvailableSoundFiles] = useState<string[]>([]);
   const [selectedSoundFile, setSelectedSoundFile] = useState<string>('');
   const [availableTextFiles, setAvailableTextFiles] = useState<string[]>([]);
@@ -939,6 +1022,7 @@ const App = () => {
     sponsorDisplayDuration: 5,
 
     selectedTextFile: '',
+    customTextContent: '',
     textOverlayAlignment: 'top-left', // New option
     textOverlayFontSize: 1.5, // New option, defaults to 1.5rem
   });
@@ -1128,6 +1212,32 @@ const App = () => {
         activeSourcesRef.current.add(osc);
         osc.onended = () => { activeSourcesRef.current.delete(osc); };
         osc.start(startTime); osc.stop(startTime + 0.8);
+    } else if (soundId === 'default-powerup') {
+        const envelopeGain = ctx.createGain();
+        envelopeGain.connect(masterGain);
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(330, startTime);
+        osc.frequency.exponentialRampToValueAtTime(880, startTime + 0.3);
+        envelopeGain.gain.setValueAtTime(0.7, startTime);
+        envelopeGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+        osc.connect(envelopeGain);
+        activeSourcesRef.current.add(osc);
+        osc.onended = () => { activeSourcesRef.current.delete(osc); };
+        osc.start(startTime); osc.stop(startTime + 0.35);
+    } else if (soundId === 'default-laser') {
+        const envelopeGain = ctx.createGain();
+        envelopeGain.connect(masterGain);
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1200, startTime);
+        osc.frequency.exponentialRampToValueAtTime(120, startTime + 0.25);
+        envelopeGain.gain.setValueAtTime(0.8, startTime);
+        envelopeGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+        osc.connect(envelopeGain);
+        activeSourcesRef.current.add(osc);
+        osc.onended = () => { activeSourcesRef.current.delete(osc); };
+        osc.start(startTime); osc.stop(startTime + 0.25);
     } else {
         const sound = currentConfig.customSounds.find(s => s.id === soundId);
         if (!sound) return;
@@ -1166,91 +1276,423 @@ const App = () => {
       setIsSaving(true);
       const newConfig = { ...config, ...updates };
       setConfig(newConfig); 
-      // Emitting with Profile ID
-      socketRef.current?.emit('update-config', { profileId: currentProfile, config: newConfig });
+      saveStoredConfig(currentProfile, newConfig);
+
+      // Broadcast to other tabs & OBS overlays
+      try {
+          syncChannelRef.current?.postMessage({ type: 'config-updated', payload: newConfig });
+      } catch (e) {}
+
+      // If connected to local backend server, emit
+      if (socketRef.current?.connected) {
+          socketRef.current.emit('update-config', { profileId: currentProfile, config: newConfig });
+      } else {
+          setTimeout(() => setIsSaving(false), 200);
+      }
   };
 
-  // === SOCKET CONNECTION ===
+  // === MULTI-TAB & OBS OVERLAY BROADCAST CHANNEL ===
+  useEffect(() => {
+      if (typeof BroadcastChannel === 'undefined') return;
+      const channelName = `extralife_sync_${currentProfile}`;
+      const ch = new BroadcastChannel(channelName);
+      syncChannelRef.current = ch;
+
+      ch.onmessage = (event) => {
+          const { type, payload } = event.data || {};
+          if (type === 'config-updated' && payload) {
+              setConfig(payload);
+              setParticipantIdInput(payload.participantId || '');
+              setTeamIdInput(payload.teamId || '');
+              setIsSaving(false);
+          } else if (type === 'data-updated' && payload) {
+              setDonations(payload.donations || []);
+              setMilestones(payload.milestones || []);
+              setTotalRaised(payload.totalRaised || 0);
+              setGoal(payload.goal || 0);
+              setTeamTotalRaised(payload.teamTotalRaised || 0);
+              setTeamName(payload.teamName || '');
+              if (payload.conversionRate) setConversionRate(payload.conversionRate);
+          } else if (type === 'event:donation' && payload) {
+              const { donation, isMilestone } = payload;
+              setToastQueue(prev => [...prev, donation]);
+              if (!isMilestone) {
+                  playSpecificSound(configRef.current.selectedSound);
+              }
+          } else if (type === 'event:celebration') {
+              setCelebrationKey(Date.now());
+              if (payload?.type === 'milestone') {
+                  playSpecificSound(configRef.current.selectedMilestoneSound);
+              } else {
+                  playSpecificSound(configRef.current.selectedSound);
+              }
+          } else if (type === 'event:clear') {
+              setActiveToasts([]);
+              setToastQueue([]);
+              setCelebrationKey(0);
+              stopAllSounds();
+          } else if (type === 'trigger-sync') {
+              fetchClientSideData();
+          }
+      };
+
+      return () => {
+          ch.close();
+      };
+  }, [currentProfile, playSpecificSound]);
+
+  // === CLIENT-SIDE EXTRA LIFE DATA FETCHER (FOR STANDALONE & GITHUB PAGES) ===
+  const fetchClientSideData = useCallback(async () => {
+      const currentConf = configRef.current;
+      const pid = currentConf.participantId;
+      if (!pid) return;
+
+      try {
+          // 1. Participant Details
+          const partRes = await fetch(`https://extra-life.org/api/participants/${pid}`);
+          if (!partRes.ok) return;
+          const partData = await partRes.json();
+
+          let newTeamId = currentConf.teamId;
+          if (currentConf.useParticipantTeamId && partData.teamID) {
+              newTeamId = String(partData.teamID);
+              if (newTeamId !== currentConf.teamId) {
+                  updateConfig({ teamId: newTeamId });
+              }
+          }
+
+          // 2. Donations
+          const donRes = await fetch(`https://extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+          const donData = donRes.ok ? await donRes.json() : [];
+
+          // 3. Milestones
+          const mileRes = await fetch(`https://extra-life.org/api/participants/${pid}/milestones`);
+          const mileData = mileRes.ok ? await mileRes.json() : [];
+
+          // 4. Team Details (optional)
+          let tRaised = 0;
+          let tName = '';
+          if (newTeamId) {
+              try {
+                  const teamRes = await fetch(`https://extra-life.org/api/teams/${newTeamId}`);
+                  if (teamRes.ok) {
+                      const tData = await teamRes.json();
+                      tRaised = tData.sumDonations || 0;
+                      tName = tData.name || '';
+                  }
+              } catch (e) {}
+          }
+
+          // 5. Currency Rate (optional)
+          let cRate = conversionRate;
+          if (currentConf.currency === 'CAD') {
+              try {
+                  const rateRes = await fetch('https://open.er-api.com/v6/latest/USD');
+                  if (rateRes.ok) {
+                      const rateData = await rateRes.json();
+                      if (rateData?.rates?.CAD) cRate = rateData.rates.CAD;
+                  }
+              } catch (e) {}
+          }
+
+          // Check for new donations
+          const isFirstFetch = seenDonationIdsRef.current.size === 0;
+          const newDonations: Donation[] = [];
+          donData.forEach((d: Donation) => {
+              if (!seenDonationIdsRef.current.has(d.donationID)) {
+                  seenDonationIdsRef.current.add(d.donationID);
+                  if (!isFirstFetch) {
+                      newDonations.push(d);
+                  }
+              }
+          });
+
+          const newRaised = partData.sumDonations || 0;
+          const newGoal = partData.fundraisingGoal || 0;
+          setTotalRaised(newRaised);
+          setGoal(newGoal);
+          setDonations(donData);
+          setMilestones(mileData);
+          setTeamTotalRaised(tRaised);
+          setTeamName(tName);
+          setConversionRate(cRate);
+
+          const updatedPayload = {
+              donations: donData,
+              milestones: mileData,
+              totalRaised: newRaised,
+              goal: newGoal,
+              teamTotalRaised: tRaised,
+              teamName: tName,
+              conversionRate: cRate
+          };
+          saveStoredData(currentProfile, updatedPayload);
+          try {
+              syncChannelRef.current?.postMessage({ type: 'data-updated', payload: updatedPayload });
+          } catch (e) {}
+
+          // Alert for new donations
+          if (newDonations.length > 0) {
+              newDonations.forEach(donation => {
+                  setToastQueue(q => [...q, donation]);
+                  playSpecificSound(currentConf.selectedSound);
+                  try {
+                      syncChannelRef.current?.postMessage({
+                          type: 'event:donation',
+                          payload: { donation, isMilestone: false }
+                      });
+                  } catch (e) {}
+
+                  // Twitch alert
+                  if (currentConf.twitchEnabled && currentConf.twitchEnableAlerts && twitchClientRef.current) {
+                      try {
+                          const donor = donation.displayName === 'Anonymous' ? 'Anonymous' : donation.displayName;
+                          const amt = `${currentConf.currency === 'USD' ? '$' : 'C$'}${(donation.amount * (currentConf.currency === 'CAD' ? cRate : 1)).toFixed(2)}`;
+                          const msg = donation.message ? ` "${donation.message}"` : '';
+                          twitchClientRef.current.say(currentConf.twitchChannel, `🎉 New Extra Life Donation! ${donor} donated ${amt}!${msg} Thank you!`);
+                      } catch (e) {}
+                  }
+              });
+
+              // Check if milestone or goal was crossed
+              const previousTotal = totalRaised;
+              if (previousTotal > 0 && newRaised > previousTotal) {
+                  const crossedMilestone = mileData.some((m: Milestone) => previousTotal < m.fundraisingGoal && newRaised >= m.fundraisingGoal);
+                  if (crossedMilestone || (newGoal > 0 && previousTotal < newGoal && newRaised >= newGoal)) {
+                      setCelebrationKey(Date.now());
+                      playSpecificSound(currentConf.selectedMilestoneSound);
+                      try {
+                          syncChannelRef.current?.postMessage({
+                              type: 'event:celebration',
+                              payload: { type: 'milestone' }
+                          });
+                      } catch (e) {}
+                  }
+              }
+          }
+      } catch (err) {
+          console.warn('Extra Life client-side fetch notice:', err);
+      }
+  }, [currentProfile, conversionRate, totalRaised, playSpecificSound]);
+
+  // Periodic polling in Standalone Mode or in Overlays
+  useEffect(() => {
+      if (!isStandaloneMode && overlayType === 'none' && socketRef.current?.connected) return;
+      if (!config.participantId) return;
+
+      fetchClientSideData();
+      const intervalMs = Math.max(MIN_REFRESH_INTERVAL, config.refreshInterval || 60) * 1000;
+      const timer = setInterval(fetchClientSideData, intervalMs);
+      return () => clearInterval(timer);
+  }, [isStandaloneMode, overlayType, config.participantId, config.refreshInterval, fetchClientSideData]);
+
+  // Client-side Twitch IRC Client via tmi.js
+  useEffect(() => {
+      if (!config.twitchEnabled || !config.twitchChannel || !config.twitchToken) {
+          if (twitchClientRef.current) {
+              try { twitchClientRef.current.disconnect(); } catch (e) {}
+              twitchClientRef.current = null;
+          }
+          return;
+      }
+
+      const tmiGlobal = (window as any).tmi;
+      if (!tmiGlobal) return;
+
+      let client: any = null;
+      try {
+          const cleanToken = config.twitchToken.startsWith('oauth:') ? config.twitchToken : `oauth:${config.twitchToken}`;
+          client = new tmiGlobal.Client({
+              options: { debug: false },
+              identity: {
+                  username: config.twitchChannel.toLowerCase(),
+                  password: cleanToken
+              },
+              channels: [config.twitchChannel.toLowerCase()]
+          });
+
+          client.connect().then(() => {
+              console.log('Twitch IRC client connected to channel:', config.twitchChannel);
+              twitchClientRef.current = client;
+          }).catch(console.error);
+
+          client.on('message', (channel: string, tags: any, message: string, self: boolean) => {
+              if (self || !configRef.current.twitchEnableCommands) return;
+              const msg = message.trim().toLowerCase();
+
+              const currentConf = configRef.current;
+              const prefix = currentConf.currency === 'USD' ? '$' : 'C$';
+              const rate = currentConf.currency === 'CAD' ? conversionRate : 1;
+
+              if (msg === '!total') {
+                  const amt = (totalRaised * rate).toFixed(2);
+                  client.say(channel, `🎮 Total raised for Extra Life: ${prefix}${amt}!`);
+              } else if (msg === '!goal') {
+                  const gAmt = (goal * rate).toFixed(2);
+                  client.say(channel, `🎯 Fundraising Goal: ${prefix}${gAmt}!`);
+              } else if (msg === '!milestone') {
+                  const sorted = [...milestones].sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
+                  const next = sorted.find(m => m.fundraisingGoal > totalRaised);
+                  if (next) {
+                      const mAmt = (next.fundraisingGoal * rate).toFixed(2);
+                      client.say(channel, `🚩 Next Milestone at ${prefix}${mAmt}: ${next.description}`);
+                  } else {
+                      client.say(channel, `🏆 All current milestones reached! Thank you!`);
+                  }
+              } else {
+                  const custom = currentConf.customCommands.find(c => c.trigger.toLowerCase() === msg);
+                  if (custom) {
+                      client.say(channel, custom.response);
+                  }
+              }
+          });
+      } catch (e) {
+          console.error('Twitch client initialization error:', e);
+      }
+
+      return () => {
+          if (client) {
+              try { client.disconnect(); } catch (e) {}
+          }
+      };
+  }, [config.twitchEnabled, config.twitchChannel, config.twitchToken, totalRaised, goal, milestones, conversionRate]);
+
+  // === BACKEND SOCKET CONNECTION & INITIALIZATION ===
   useEffect(() => {
       // Determine Profile from URL
       const params = new URLSearchParams(window.location.search);
       const profile = params.get('profile') || 'default';
       setCurrentProfile(profile);
 
-      const socket = io(SERVER_URL);
-      socketRef.current = socket;
+      // Instant load from localStorage
+      const storedConfig = loadStoredConfig(profile);
+      if (storedConfig) {
+          setConfig(prev => ({ ...prev, ...storedConfig }));
+          setParticipantIdInput(storedConfig.participantId || '');
+          setTeamIdInput(storedConfig.teamId || '');
+      } else if (profile !== 'default') {
+          setConfig(prev => ({ ...prev, participantId: profile }));
+          setParticipantIdInput(profile);
+      }
 
-      socket.on('connect', () => {
-          console.log('Connected to backend, joining profile:', profile);
+      const storedData = loadStoredData(profile);
+      if (storedData) {
+          setDonations(storedData.donations || []);
+          setMilestones(storedData.milestones || []);
+          setTotalRaised(storedData.totalRaised || 0);
+          setGoal(storedData.goal || 0);
+          setTeamTotalRaised(storedData.teamTotalRaised || 0);
+          setTeamName(storedData.teamName || '');
+          if (storedData.conversionRate) setConversionRate(storedData.conversionRate);
+      }
+
+      // If running on GitHub Pages or static host, activate standalone mode
+      if (isGitHubPagesHost) {
+          setIsStandaloneMode(true);
           setIsConnected(true);
-          // Handshake profile info
-          socket.emit('join-profile', profile);
-      });
+          return;
+      }
 
-      socket.on('disconnect', () => {
-          console.log('Disconnected from backend');
-          setIsConnected(false);
-      });
+      let socket: Socket | null = null;
+      let connectTimer: any = null;
 
-      socket.on('init-state', (state: any) => {
-          setConfig(state.config);
-          setDonations(state.data.donations);
-          setMilestones(state.data.milestones);
-          setTotalRaised(state.data.totalRaised);
-          setGoal(state.data.goal);
-          setTeamTotalRaised(state.data.teamTotalRaised);
-          setTeamName(state.data.teamName);
-          setConversionRate(state.data.conversionRate || 1);
+      try {
+          socket = io(SERVER_URL, { timeout: 2000, reconnectionAttempts: 2 });
+          socketRef.current = socket;
 
-          setParticipantIdInput(state.config.participantId || '');
-          setTeamIdInput(state.config.teamId || '');
-      });
+          connectTimer = setTimeout(() => {
+              if (!socket?.connected) {
+                  setIsStandaloneMode(true);
+                  setIsConnected(true);
+              }
+          }, 1500);
 
-      socket.on('config-updated', (newConfig: any) => {
-          setConfig(newConfig);
-          setParticipantIdInput(newConfig.participantId || '');
-          setTeamIdInput(newConfig.teamId || '');
-          setIsSaving(false);
-      });
+          socket.on('connect', () => {
+              clearTimeout(connectTimer);
+              console.log('Connected to backend, joining profile:', profile);
+              setIsConnected(true);
+              setIsStandaloneMode(false);
+              socket?.emit('join-profile', profile);
+          });
 
-      socket.on('data-updated', (data: any) => {
-          setDonations(data.donations);
-          setMilestones(data.milestones);
-          setTotalRaised(data.totalRaised);
-          setGoal(data.goal);
-          setTeamTotalRaised(data.teamTotalRaised);
-          setTeamName(data.teamName);
-          if (data.conversionRate) setConversionRate(data.conversionRate);
-      });
+          socket.on('disconnect', () => {
+              console.log('Disconnected from backend');
+              setIsConnected(false);
+          });
 
-      socket.on('event:donation', (payload: any) => {
-          const { donation, isMilestone } = payload;
-          setToastQueue(prev => [...prev, donation]);
-          if (!isMilestone) {
-              playSpecificSound(configRef.current.selectedSound);
-          }
-      });
+          socket.on('connect_error', () => {
+              clearTimeout(connectTimer);
+              setIsStandaloneMode(true);
+              setIsConnected(true);
+          });
 
-      socket.on('event:celebration', (payload: any) => {
-          setCelebrationKey(Date.now());
-          if (payload.type === 'milestone') {
-              playSpecificSound(configRef.current.selectedMilestoneSound);
-          } else {
-              playSpecificSound(configRef.current.selectedSound);
-          }
-      });
-      
-      socket.on('event:clear', () => {
-          setActiveToasts([]);
-          setToastQueue([]);
-          setCelebrationKey(0);
-          stopAllSounds();
-      });
+          socket.on('init-state', (state: any) => {
+              setConfig(state.config);
+              setDonations(state.data.donations || []);
+              setMilestones(state.data.milestones || []);
+              setTotalRaised(state.data.totalRaised || 0);
+              setGoal(state.data.goal || 0);
+              setTeamTotalRaised(state.data.teamTotalRaised || 0);
+              setTeamName(state.data.teamName || '');
+              setConversionRate(state.data.conversionRate || 1);
+              setParticipantIdInput(state.config.participantId || '');
+              setTeamIdInput(state.config.teamId || '');
+              saveStoredConfig(profile, state.config);
+              saveStoredData(profile, state.data);
+          });
+
+          socket.on('config-updated', (newConfig: any) => {
+              setConfig(newConfig);
+              setParticipantIdInput(newConfig.participantId || '');
+              setTeamIdInput(newConfig.teamId || '');
+              setIsSaving(false);
+              saveStoredConfig(profile, newConfig);
+          });
+
+          socket.on('data-updated', (data: any) => {
+              setDonations(data.donations || []);
+              setMilestones(data.milestones || []);
+              setTotalRaised(data.totalRaised || 0);
+              setGoal(data.goal || 0);
+              setTeamTotalRaised(data.teamTotalRaised || 0);
+              setTeamName(data.teamName || '');
+              if (data.conversionRate) setConversionRate(data.conversionRate);
+              saveStoredData(profile, data);
+          });
+
+          socket.on('event:donation', (payload: any) => {
+              const { donation, isMilestone } = payload;
+              setToastQueue(prev => [...prev, donation]);
+              if (!isMilestone) {
+                  playSpecificSound(configRef.current.selectedSound);
+              }
+          });
+
+          socket.on('event:celebration', (payload: any) => {
+              setCelebrationKey(Date.now());
+              if (payload.type === 'milestone') {
+                  playSpecificSound(configRef.current.selectedMilestoneSound);
+              } else {
+                  playSpecificSound(configRef.current.selectedSound);
+              }
+          });
+          
+          socket.on('event:clear', () => {
+              setActiveToasts([]);
+              setToastQueue([]);
+              setCelebrationKey(0);
+              stopAllSounds();
+          });
+      } catch (e) {
+          setIsStandaloneMode(true);
+          setIsConnected(true);
+      }
 
       return () => {
-          socket.disconnect();
+          clearTimeout(connectTimer);
+          socket?.disconnect();
       };
-  }, []); 
+  }, [playSpecificSound, stopAllSounds]); 
 
   useEffect(() => {
     if (isConnected && pendingTwitchToken) {
@@ -1331,11 +1773,11 @@ const App = () => {
   const handleSwitchProfile = (e: React.FormEvent) => {
       e.preventDefault();
       if (!profileInput.trim()) return;
-      window.location.href = `/?profile=${profileInput.trim()}`;
+      window.location.href = `${window.location.pathname}?profile=${encodeURIComponent(profileInput.trim())}`;
   };
 
   const handleChangeId = () => {
-    window.location.href = '/';
+    window.location.href = window.location.pathname;
   };
 
   const handleIdSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -1345,6 +1787,8 @@ const App = () => {
         teamId: teamIdInput,
         useParticipantTeamId: config.useParticipantTeamId
     });
+    // Trigger instant fetch on submit
+    setTimeout(fetchClientSideData, 50);
   };
   
   const handlePresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -1359,7 +1803,7 @@ const App = () => {
   };
   
   const handleGetTwitchToken = () => {
-    const redirectUri = window.location.origin;
+    const redirectUri = `${window.location.origin}${window.location.pathname}`;
     const scopes = 'chat:read+chat:edit';
     const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scopes}&state=${encodeURIComponent(currentProfile)}`;
     window.location.href = authUrl;
@@ -1381,7 +1825,15 @@ const App = () => {
       window.open(url, `extralife${overlayName.charAt(0).toUpperCase() + overlayName.slice(1)}Overlay`, features);
   };
 
-  const handleManualSync = () => socketRef.current?.emit('trigger-sync', currentProfile);
+  const handleManualSync = () => {
+      if (socketRef.current?.connected) {
+          socketRef.current.emit('trigger-sync', currentProfile);
+      }
+      fetchClientSideData();
+      try {
+          syncChannelRef.current?.postMessage({ type: 'trigger-sync' });
+      } catch (e) {}
+  };
   
   const handleTestDonation = () => {
       if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
@@ -1389,10 +1841,100 @@ const App = () => {
       } else if (!audioCtxRef.current) {
           audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
-      socketRef.current?.emit('trigger-test', currentProfile);
+
+      if (socketRef.current?.connected) {
+          socketRef.current.emit('trigger-test', currentProfile);
+      } else {
+          // Client-side test donation
+          const testAmount = 25;
+          const fakeDonation: Donation = {
+              donationID: `test-${Date.now()}`,
+              displayName: 'GenerousGamer',
+              amount: testAmount,
+              message: 'For the Kids! 🎮🕹️ (Test Donation)',
+              createdDateUTC: new Date().toISOString()
+          };
+
+          const newTotal = totalRaised + testAmount;
+          setTotalRaised(newTotal);
+          setDonations(prev => [fakeDonation, ...prev]);
+          setToastQueue(prev => [...prev, fakeDonation]);
+          playSpecificSound(configRef.current.selectedSound);
+
+          const isMilestoneHit = milestones.some(m => totalRaised < m.fundraisingGoal && newTotal >= m.fundraisingGoal);
+          if (isMilestoneHit || (goal > 0 && totalRaised < goal && newTotal >= goal)) {
+              setCelebrationKey(Date.now());
+              playSpecificSound(configRef.current.selectedMilestoneSound);
+              try {
+                  syncChannelRef.current?.postMessage({ type: 'event:celebration', payload: { type: 'milestone' } });
+              } catch (e) {}
+          }
+
+          try {
+              syncChannelRef.current?.postMessage({
+                  type: 'event:donation',
+                  payload: { donation: fakeDonation, isMilestone: false }
+              });
+              syncChannelRef.current?.postMessage({
+                  type: 'data-updated',
+                  payload: {
+                      donations: [fakeDonation, ...donations],
+                      milestones,
+                      totalRaised: newTotal,
+                      goal,
+                      teamTotalRaised,
+                      teamName,
+                      conversionRate
+                  }
+              });
+          } catch (e) {}
+      }
   };
 
-  const handleClearOverlays = () => socketRef.current?.emit('trigger-clear', currentProfile);
+  const handleClearOverlays = () => {
+      if (socketRef.current?.connected) {
+          socketRef.current.emit('trigger-clear', currentProfile);
+      }
+      setActiveToasts([]);
+      setToastQueue([]);
+      setCelebrationKey(0);
+      stopAllSounds();
+      try {
+          syncChannelRef.current?.postMessage({ type: 'event:clear' });
+      } catch (e) {}
+  };
+
+  const handleExportConfig = () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `extralife-config-${currentProfile}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+  };
+
+  const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const imported = JSON.parse(event.target?.result as string);
+              if (typeof imported === 'object' && imported !== null) {
+                  updateConfig(imported);
+                  setImportSuccessMsg(t('importSuccess'));
+                  setTimeout(() => setImportSuccessMsg(null), 3500);
+              } else {
+                  setFormError(t('importError'));
+              }
+          } catch (err) {
+              setFormError(t('importError'));
+          }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+  };
 
   const handleAddSound = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1492,8 +2034,52 @@ const App = () => {
       };
       updateConfig({ sponsors: [...config.sponsors, newSponsor] });
   };
+  const handleAddSponsorFromUrl = () => {
+      if (!sponsorUrlInput.trim()) return;
+      const newSponsor: Sponsor = {
+          id: `sp-${Date.now()}`,
+          name: sponsorNameInput.trim() || 'Sponsor',
+          imageUrl: sponsorUrlInput.trim()
+      };
+      updateConfig({ sponsors: [...config.sponsors, newSponsor] });
+      setSponsorUrlInput('');
+      setSponsorNameInput('');
+  };
+  const handleUploadSponsorFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+          setFormError(t('fileTooLarge'));
+          return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          const newSponsor: Sponsor = {
+              id: `sp-${Date.now()}`,
+              name: sponsorNameInput.trim() || file.name.replace(/\.[^/.]+$/, ''),
+              imageUrl: ev.target?.result as string
+          };
+          updateConfig({ sponsors: [...config.sponsors, newSponsor] });
+          setSponsorNameInput('');
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+  };
   const handleDeleteSponsor = (id: string) => {
       updateConfig({ sponsors: config.sponsors.filter(s => s.id !== id) });
+  };
+
+  // Text Overlay File Upload Handler
+  const handleUploadTextFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          const text = ev.target?.result as string;
+          updateConfig({ customTextContent: text, selectedTextFile: file.name });
+      };
+      reader.readAsText(file);
+      e.target.value = '';
   };
   
   // Custom Command Handlers
@@ -1650,8 +2236,8 @@ const App = () => {
                     </button>
                 </form>
 
-                <div style={{marginTop: '30px', fontSize: '0.8rem', color: config.textColor, opacity: 0.5}}>
-                    {isConnected ? `● Connected to Server` : `○ Connecting...`}
+                <div style={{marginTop: '30px', fontSize: '0.8rem', color: config.textColor, opacity: 0.7}}>
+                    {isStandaloneMode ? `● ${t('standaloneMode')}` : (isConnected ? `● Connected to Server` : `○ Connecting...`)}
                 </div>
             </div>
         </div>
@@ -1680,8 +2266,15 @@ const App = () => {
           <>
             <div style={styles.header}>
                 <span>{t('appTitle')}</span>
-                {!isConnected && <span style={{fontSize: '0.5em', color: config.errorColor, display: 'block', marginTop: '10px'}}>{t('disconnected')}</span>}
-                {isConnected && <span style={{fontSize: '0.5em', color: config.successColor, display: 'block', marginTop: '5px', opacity: 0.7}}>● Connected</span>}
+                {isStandaloneMode ? (
+                    <span style={{fontSize: '0.5em', color: config.successColor, display: 'block', marginTop: '6px', opacity: 0.9}}>
+                        ● {t('standaloneMode')}
+                    </span>
+                ) : !isConnected ? (
+                    <span style={{fontSize: '0.5em', color: config.errorColor, display: 'block', marginTop: '10px'}}>{t('disconnected')}</span>
+                ) : (
+                    <span style={{fontSize: '0.5em', color: config.successColor, display: 'block', marginTop: '5px', opacity: 0.7}}>● Connected</span>
+                )}
             </div>
             
             {/* CURRENT PROFILE DISPLAY & CHANGE BUTTON */}
@@ -2182,54 +2775,117 @@ const App = () => {
                                 ))}
                             </div>
                             
-                            <label style={styles.label}>{t('addSponsorFromFolder')}</label>
-                            <div style={{display: 'flex', gap: '10px'}}>
-                                <select 
-                                value={selectedSponsorFile} 
-                                onChange={(e) => setSelectedSponsorFile(e.target.value)}
-                                style={{...styles.input, flexGrow: 1}}
-                                >
-                                    {availableSponsorFiles.length === 0 && <option value="">{t('noSponsorsFound')}</option>}
-                                    {availableSponsorFiles.map(file => (
-                                        <option key={file} value={file}>{file}</option>
-                                    ))}
-                                </select>
+                            {/* Upload or Add via URL (Works on GitHub Pages & Standalone) */}
+                            <label style={styles.label}>{t('addSponsor')}</label>
+                            <div style={{display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap'}}>
+                                <input 
+                                    type="text" 
+                                    placeholder={t('sponsorName')} 
+                                    value={sponsorNameInput} 
+                                    onChange={e => setSponsorNameInput(e.target.value)} 
+                                    style={{...styles.input, flex: '1 1 120px'}}
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder={t('imageUrlPlaceholder')} 
+                                    value={sponsorUrlInput} 
+                                    onChange={e => setSponsorUrlInput(e.target.value)} 
+                                    style={{...styles.input, flex: '2 1 200px'}}
+                                />
                                 <button 
                                     type="button" 
-                                    onClick={handleAddSponsorFromList} 
-                                    disabled={availableSponsorFiles.length === 0 || !selectedSponsorFile}
-                                    style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}
+                                    onClick={handleAddSponsorFromUrl} 
+                                    disabled={!sponsorUrlInput.trim()} 
+                                    style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0}}
                                 >
                                     {t('add')}
                                 </button>
                             </div>
-                            <p style={{fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px'}}>
-                                {t('sponsorFolderHint')}
-                            </p>
+
+                            <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px'}}>
+                                <label style={{...styles.label, margin: 0}}>{t('orUploadImage')}:</label>
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    onChange={handleUploadSponsorFile} 
+                                    style={{fontSize: '0.8rem', color: config.textColor}}
+                                />
+                            </div>
+
+                            {/* Add from server folder (when running with backend) */}
+                            {availableSponsorFiles.length > 0 && (
+                                <>
+                                    <label style={styles.label}>{t('addSponsorFromFolder')}</label>
+                                    <div style={{display: 'flex', gap: '10px'}}>
+                                        <select 
+                                            value={selectedSponsorFile} 
+                                            onChange={(e) => setSelectedSponsorFile(e.target.value)}
+                                            style={{...styles.input, flexGrow: 1}}
+                                        >
+                                            {availableSponsorFiles.map(file => (
+                                                <option key={file} value={file}>{file}</option>
+                                            ))}
+                                        </select>
+                                        <button 
+                                            type="button" 
+                                            onClick={handleAddSponsorFromList} 
+                                            disabled={!selectedSponsorFile}
+                                            style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}
+                                        >
+                                            {t('add')}
+                                        </button>
+                                    </div>
+                                    <p style={{fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px'}}>
+                                        {t('sponsorFolderHint')}
+                                    </p>
+                                </>
+                            )}
                             </CollapsibleSection>
                             
                             <CollapsibleSection title={t('textOverlay')} isInitiallyCollapsed={true} styles={styles}>
-                                <label style={styles.label}>{t('selectTextFile')}</label>
-                                <select 
-                                value={config.selectedTextFile || ''} 
-                                onChange={(e) => updateConfig({ selectedTextFile: e.target.value })}
-                                style={{...styles.input, marginBottom: '0.5rem'}}
-                                >
-                                    <option value="">-- {t('none')} --</option>
-                                    {availableTextFiles.length === 0 && <option value="" disabled>{t('noTextFilesFound')}</option>}
-                                    {availableTextFiles.map(file => (
-                                        <option key={file} value={file}>{file}</option>
-                                    ))}
-                                </select>
-                                <p style={{fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px'}}>
-                                    {t('textFolderHint')}
-                                </p>
+                                <label style={styles.label}>{t('customTextLabel')}</label>
+                                <textarea
+                                    value={config.customTextContent || ''}
+                                    onChange={(e) => updateConfig({ customTextContent: e.target.value })}
+                                    placeholder={t('customTextPlaceholder')}
+                                    rows={3}
+                                    style={{...styles.input, resize: 'vertical', marginBottom: '0.8rem'}}
+                                />
+
+                                <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem'}}>
+                                    <label style={{...styles.label, margin: 0}}>{t('uploadTextFile')}:</label>
+                                    <input 
+                                        type="file" 
+                                        accept=".txt,.md" 
+                                        onChange={handleUploadTextFile} 
+                                        style={{fontSize: '0.8rem', color: config.textColor}}
+                                    />
+                                </div>
+
+                                {availableTextFiles.length > 0 && (
+                                    <>
+                                        <label style={styles.label}>{t('selectTextFile')}</label>
+                                        <select 
+                                            value={config.selectedTextFile || ''} 
+                                            onChange={(e) => updateConfig({ selectedTextFile: e.target.value })}
+                                            style={{...styles.input, marginBottom: '0.5rem'}}
+                                        >
+                                            <option value="">-- {t('none')} --</option>
+                                            {availableTextFiles.map(file => (
+                                                <option key={file} value={file}>{file}</option>
+                                            ))}
+                                        </select>
+                                        <p style={{fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px'}}>
+                                            {t('textFolderHint')}
+                                        </p>
+                                    </>
+                                )}
 
                                 <label style={{...styles.label, marginTop: '1rem'}}>{t('textAlignment')}</label>
                                 <select 
-                                value={config.textOverlayAlignment || 'top-left'} 
-                                onChange={(e) => updateConfig({ textOverlayAlignment: e.target.value })}
-                                style={styles.input}
+                                    value={config.textOverlayAlignment || 'top-left'} 
+                                    onChange={(e) => updateConfig({ textOverlayAlignment: e.target.value })}
+                                    style={styles.input}
                                 >
                                     <option value="top-left">{t('topLeft')}</option>
                                     <option value="top-center">{t('topCenter')}</option>
@@ -2252,6 +2908,29 @@ const App = () => {
                                     onChange={(e) => updateConfig({ textOverlayFontSize: Number(e.target.value) })}
                                     style={styles.input}
                                 />
+                            </CollapsibleSection>
+
+                            {/* Backup & Restore for Standalone / GitHub Pages */}
+                            <CollapsibleSection title={t('profileBackup')} isInitiallyCollapsed={true} styles={styles}>
+                                <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleExportConfig} 
+                                        style={{...styles.button, backgroundColor: config.accentColor2, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1}}
+                                    >
+                                        {t('exportConfig')}
+                                    </button>
+                                    <label style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1, textAlign: 'center', cursor: 'pointer'}}>
+                                        {t('importConfig')}
+                                        <input 
+                                            type="file" 
+                                            accept=".json" 
+                                            onChange={handleImportConfig} 
+                                            style={{display: 'none'}} 
+                                        />
+                                    </label>
+                                </div>
+                                {importSuccessMsg && <p style={{color: config.successColor, fontSize: '0.85rem', marginTop: '10px'}}>{importSuccessMsg}</p>}
                             </CollapsibleSection>
 
                             <button type="submit" style={{...styles.button, backgroundColor: config.successColor, color: config.buttonTextColor, marginTop: '2rem', width: '100%' }}>
@@ -2284,7 +2963,7 @@ const App = () => {
             {overlayType === 'celebration' && <CelebrationOverlay playSound={playSpecificSound} accentColor1={config.accentColor1} accentColor2={config.accentColor2} successColor={config.successColor} celebrationDuration={config.celebrationDuration} activeCelebrationKey={celebrationKey} />}
             {overlayType === 'schedule' && <ScheduleOverlay items={config.scheduleItems} styles={styles} accentColor1={config.accentColor1} accentColor2={config.accentColor2} textColor={config.textColor} fontFamily={config.fontFamily} t={t} />}
             {overlayType === 'sponsors' && <SponsorOverlay sponsors={config.sponsors} styles={styles} animationDuration={config.sponsorDisplayDuration} t={t} />}
-            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} />}
+            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} />}
           </>
         )}
       </div>

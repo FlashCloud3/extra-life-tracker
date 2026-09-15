@@ -31,6 +31,8 @@ jest.unstable_mockModule('fs/promises', () => {
   const mockFunctions = {
     readFile: jest.fn().mockResolvedValue('{}'),
     writeFile: jest.fn().mockResolvedValue(undefined),
+    mkdir: jest.fn().mockResolvedValue(undefined),
+    readdir: jest.fn().mockResolvedValue([]),
   };
   return {
     __esModule: true,
@@ -53,6 +55,7 @@ describe('Backend Logic', () => {
     config.participantId = '12345';
     config.twitchChannel = 'test_channel';
     config.twitchToken = 'oauth:123';
+    config.twitchEnabled = true;
     config.twitchEnableAlerts = true;
     config.twitchEnableCommands = true;
     config.currency = 'USD';
