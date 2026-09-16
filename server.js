@@ -616,7 +616,7 @@ function startProfilePolling(profile) {
     if (profile.pollingInterval) clearInterval(profile.pollingInterval);
     // Initial fetch
     fetchProfileData(profile);
-    const intervalSecs = Math.max(1, Number(profile.config.refreshInterval) || 60);
+    const intervalSecs = Math.max(60, Number(profile.config.refreshInterval) || 60);
     profile.pollingInterval = setInterval(() => fetchProfileData(profile), intervalSecs * 1000);
 }
 
@@ -649,6 +649,9 @@ io.on('connection', (socket) => {
         
         // Merge and Save
         profile.config = { ...profile.config, ...newConfig };
+        if (profile.config.refreshInterval !== undefined) {
+            profile.config.refreshInterval = Math.max(60, Number(profile.config.refreshInterval) || 60);
+        }
         await saveProfileConfig(profile.id, profile.config);
         
         // Force Participant ID Sync again to be safe

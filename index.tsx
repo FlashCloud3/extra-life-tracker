@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io, Socket } from 'socket.io-client';
+import tmi from 'tmi.js';
 
 // === LOCALIZATION ===
 const translations = {
@@ -17,7 +18,7 @@ const translations = {
     enterId: "Enter Extra Life ID",
     autoDetect: "Auto-detect Team ID",
     teamId: "Team ID",
-    refreshSeconds: "Refresh (seconds)",
+    refreshSeconds: "Refresh (seconds, min 60)",
     currency: "Currency",
     exchangeRate: "Exchange Rate",
     customExchangeRate: "Custom Exchange Rate Multiplier",
@@ -25,6 +26,7 @@ const translations = {
     websiteTotalLabel: "Or Calculate from Extra Life Website Total (CAD)",
     websiteTotalHelp: "Enter current CAD total shown on Extra Life to auto-calculate rate",
     calculatedRateNotice: "Calculated using your API total of ${usd} USD",
+    clearExchangeRate: "Clear Custom Rate",
     refreshRate: "Refresh",
     twitchIntegration: "Twitch Integration",
     twitchEnabled: "Enable Twitch Integration",
@@ -177,7 +179,7 @@ const translations = {
     enterId: "Entrer ID Extra Life",
     autoDetect: "Auto-détecter ID Équipe",
     teamId: "ID Équipe",
-    refreshSeconds: "Rafraîchissement (secondes)",
+    refreshSeconds: "Rafraîchissement (secondes, min 60)",
     currency: "Devise",
     exchangeRate: "Taux de change",
     customExchangeRate: "Multiplicateur de taux personnalisé",
@@ -185,6 +187,7 @@ const translations = {
     websiteTotalLabel: "Ou calculer via le total du site Extra Life (CAD)",
     websiteTotalHelp: "Entrez le montant CAD sur Extra Life pour calculer le taux",
     calculatedRateNotice: "Calculé avec votre total API de {usd} $ USD",
+    clearExchangeRate: "Effacer le taux personnalisé",
     refreshRate: "Actualiser",
     twitchIntegration: "Intégration Twitch",
     twitchEnabled: "Activer Intégration Twitch",
@@ -913,7 +916,7 @@ const App = () => {
   };
 
   // === CONSTANTS ===
-  const MIN_REFRESH_INTERVAL = 1; 
+  const MIN_REFRESH_INTERVAL = 60; // Extra Life / DonorDrive API recommends at least 60 seconds to prevent rate limiting
   const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
   const SERVER_URL = window.location.origin; 
   const MAX_VISIBLE_TOASTS = 4;
@@ -1378,6 +1381,9 @@ const App = () => {
   const updateConfig = (updates: Partial<typeof config>) => {
       setIsSaving(true);
       const newConfig = { ...config, ...updates };
+      if (newConfig.refreshInterval !== undefined && newConfig.refreshInterval !== 0) {
+          newConfig.refreshInterval = Math.max(MIN_REFRESH_INTERVAL, newConfig.refreshInterval);
+      }
       setConfig(newConfig); 
       saveStoredConfig(currentProfile, newConfig);
 
@@ -1611,13 +1617,14 @@ const App = () => {
           return;
       }
 
-      const tmiGlobal = (window as any).tmi;
-      if (!tmiGlobal) return;
+      const tmiModule: any = tmi || (window as any).tmi;
+      const ClientConstructor = tmiModule?.Client || tmiModule?.client || (window as any).tmi?.Client;
+      if (!ClientConstructor) return;
 
       let client: any = null;
       try {
           const cleanToken = config.twitchToken.startsWith('oauth:') ? config.twitchToken : `oauth:${config.twitchToken}`;
-          client = new tmiGlobal.Client({
+          client = new ClientConstructor({
               options: { debug: false },
               identity: {
                   username: config.twitchChannel.toLowerCase(),
@@ -2543,8 +2550,14 @@ const App = () => {
                                     const parsed = val === '' ? 0 : parseInt(val, 10);
                                     updateConfig({ refreshInterval: isNaN(parsed) ? 60 : parsed });
                                 }} 
+                                onBlur={() => {
+                                    if (!config.refreshInterval || config.refreshInterval < 60) {
+                                        updateConfig({ refreshInterval: 60 });
+                                    }
+                                }}
                                 style={styles.input} 
-                                min={1} 
+                                min={60} 
+                                placeholder="60"
                             />
                             
                             <label style={styles.label}>{t('currency')}</label>
@@ -2559,22 +2572,43 @@ const App = () => {
 
                             {config.currency === 'CAD' && (
                                 <div style={{ marginTop: '8px', marginBottom: '14px', padding: '10px', backgroundColor: hexToRgba(config.panelBorderColor, 0.1), border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}` }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
                                         <span style={{ fontSize: '0.85rem', color: config.accentColor2 }}>
                                             {t('exchangeRate')}: <strong>1 USD = {effectiveRate.toFixed(4)} CAD</strong>
+                                            {config.customExchangeRate > 0 && (
+                                                <span style={{ marginLeft: '6px', fontSize: '0.72rem', opacity: 0.8, color: config.textColor }}>
+                                                    ({t('customExchangeRate')})
+                                                </span>
+                                            )}
                                         </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setWebsiteTotalInput('');
-                                                updateConfig({ customExchangeRate: 0 });
-                                                fetchConversionRate(true);
-                                            }}
-                                            style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.accentColor2 }}
-                                            title="Reset to live API exchange rate"
-                                        >
-                                            ↻ {t('refreshRate')} (Live)
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                            {Boolean(config.customExchangeRate || websiteTotalInput) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setWebsiteTotalInput('');
+                                                        updateConfig({ customExchangeRate: 0 });
+                                                        fetchConversionRate(true);
+                                                    }}
+                                                    style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: hexToRgba(config.panelBorderColor, 0.2), border: `1px solid ${config.panelBorderColor}`, color: config.textColor }}
+                                                    title="Clear custom rates and return to live rate"
+                                                >
+                                                    ✕ {t('clearExchangeRate')}
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setWebsiteTotalInput('');
+                                                    updateConfig({ customExchangeRate: 0 });
+                                                    fetchConversionRate(true);
+                                                }}
+                                                style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.accentColor2 }}
+                                                title="Fetch latest live API exchange rate"
+                                            >
+                                                ↻ {t('refreshRate')} (Live)
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Box 1: Direct Custom Exchange Rate Multiplier */}
@@ -2620,12 +2654,27 @@ const App = () => {
                                             style={{ ...styles.input, marginBottom: 0, fontSize: '0.85rem', padding: '6px', flex: 1 }}
                                         />
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: config.accentColor2, opacity: 0.85, marginTop: '5px' }}>
-                                        {totalRaised > 0 
-                                            ? `${t('calculatedRateNotice', { usd: totalRaised.toFixed(2) })}`
-                                            : (goal > 0 
-                                                ? `${t('calculatedRateNotice', { usd: goal.toFixed(2) })}`
-                                                : t('websiteTotalHelp'))}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '4px' }}>
+                                        <div style={{ fontSize: '0.72rem', color: config.accentColor2, opacity: 0.85 }}>
+                                            {totalRaised > 0 
+                                                ? `${t('calculatedRateNotice', { usd: totalRaised.toFixed(2) })}`
+                                                : (goal > 0 
+                                                    ? `${t('calculatedRateNotice', { usd: goal.toFixed(2) })}`
+                                                    : t('websiteTotalHelp'))}
+                                        </div>
+                                        {Boolean(config.customExchangeRate || websiteTotalInput) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setWebsiteTotalInput('');
+                                                    updateConfig({ customExchangeRate: 0 });
+                                                    fetchConversionRate(true);
+                                                }}
+                                                style={{ ...styles.button, margin: 0, padding: '2px 6px', fontSize: '0.7rem', backgroundColor: 'transparent', border: `1px solid ${config.panelBorderColor}`, color: config.textColor, cursor: 'pointer' }}
+                                            >
+                                                ✕ {t('clearExchangeRate')}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             )}
