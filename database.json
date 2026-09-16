@@ -6,11 +6,11 @@
       "useParticipantTeamId": true,
       "refreshInterval": 360,
       "currency": "CAD",
-      "customExchangeRate": 1.3861,
+      "customExchangeRate": 0,
       "eventStartTime": "",
       "celebrationDuration": 15,
       "language": "en",
-      "twitchEnabled": false,
+      "twitchEnabled": true,
       "twitchChannel": "",
       "twitchToken": "",
       "twitchEnableAlerts": true,
@@ -25,7 +25,7 @@
       "successColor": "#ffff00",
       "errorColor": "#ff4444",
       "buttonTextColor": "#000020",
-      "fontFamily": "'Press Start 2P', cursive",
+      "fontFamily": "'Bungee', sans-serif",
       "themingMode": "simple",
       "notificationAnimation": "slide",
       "isSoundEnabled": true,
@@ -38,7 +38,8 @@
       "sponsorDisplayDuration": 5,
       "selectedTextFile": "",
       "textOverlayAlignment": "top-left",
-      "textOverlayFontSize": 1.5
+      "textOverlayFontSize": 1.5,
+      "customTextContent": "test text\ntest\ntest\ntest\n"
     },
     "default": {
       "participantId": "",

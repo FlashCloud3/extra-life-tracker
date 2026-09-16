@@ -113,6 +113,11 @@ const translations = {
     totalRaised: "Total Raised",
     teamRaised: "Team Raised",
     lastDonator: "Last Donator",
+    lastFetched: "Last fetched from server",
+    justNow: "just now",
+    secondsAgo: "{s}s ago",
+    minutesAgo: "{m}m ago",
+    never: "Never",
     none: "None",
     donated: "donated",
     goalReached: "Fundraising Goal Reached!",
@@ -274,6 +279,11 @@ const translations = {
     totalRaised: "Total récolté",
     teamRaised: "Total équipe",
     lastDonator: "Dernier donateur",
+    lastFetched: "Dernière mise à jour du serveur",
+    justNow: "à l'instant",
+    secondsAgo: "il y a {s}s",
+    minutesAgo: "il y a {m}m",
+    never: "Jamais",
     none: "Aucun",
     donated: "a donné",
     goalReached: "Objectif de collecte atteint !",
@@ -978,6 +988,7 @@ const App = () => {
   
   const [goal, setGoal] = useState<number>(0); 
   const [conversionRate, setConversionRate] = useState<number>(1.0); 
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
   // UI/Config State
   const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'celebration' | 'schedule' | 'sponsors' | 'text'>('none');
@@ -1146,6 +1157,12 @@ const App = () => {
     }
     return text;
   }, [config.language]);
+
+  // Formatter for when data was last fetched from the server
+  const formatLastFetched = useCallback((date: Date | null) => {
+    if (!date) return t('never');
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }, [t]);
 
   // Currency Exchange Rate Fetcher with multi-tiered fallbacks
   const fetchConversionRate = useCallback(async (_forceRefresh = false): Promise<number> => {
@@ -1422,6 +1439,11 @@ const App = () => {
               setTeamTotalRaised(payload.teamTotalRaised || 0);
               setTeamName(payload.teamName || '');
               if (payload.conversionRate) setConversionRate(payload.conversionRate);
+              if (payload.lastFetchedAt) {
+                  setLastFetchedAt(new Date(payload.lastFetchedAt));
+              } else {
+                  setLastFetchedAt(new Date());
+              }
           } else if (type === 'event:donation' && payload) {
               const { donation, isMilestone } = payload;
               setToastQueue(prev => [...prev, donation]);
@@ -1578,6 +1600,35 @@ const App = () => {
               }
           }
 
+          const fetchTime = new Date();
+          setLastFetchedAt(fetchTime);
+          saveStoredData(currentProfileRef.current, {
+              donations: donData,
+              milestones: mileData,
+              totalRaised: newRaised,
+              goal: newGoal,
+              teamTotalRaised: tRaised,
+              teamName: tName,
+              conversionRate: effectiveRate,
+              lastFetchedAt: fetchTime.getTime()
+          });
+
+          try {
+              syncChannelRef.current?.postMessage({
+                  type: 'data-updated',
+                  payload: {
+                      donations: donData,
+                      milestones: mileData,
+                      totalRaised: newRaised,
+                      goal: newGoal,
+                      teamTotalRaised: tRaised,
+                      teamName: tName,
+                      conversionRate: effectiveRate,
+                      lastFetchedAt: fetchTime.getTime()
+                  }
+              });
+          } catch (e) {}
+
           lastFetchTimeRef.current = Date.now();
       } catch (err) {
           console.warn('Extra Life client-side fetch notice:', err);
@@ -1706,6 +1757,7 @@ const App = () => {
           setTeamTotalRaised(storedData.teamTotalRaised || 0);
           setTeamName(storedData.teamName || '');
           if (storedData.conversionRate) setConversionRate(storedData.conversionRate);
+          if (storedData.lastFetchedAt) setLastFetchedAt(new Date(storedData.lastFetchedAt));
       }
 
       // If running on GitHub Pages or static host, activate standalone mode
@@ -1757,6 +1809,11 @@ const App = () => {
               setTeamTotalRaised(state.data.teamTotalRaised || 0);
               setTeamName(state.data.teamName || '');
               setConversionRate(state.data.conversionRate || 1);
+              if (state.data.lastFetchedAt) {
+                  setLastFetchedAt(new Date(state.data.lastFetchedAt));
+              } else {
+                  setLastFetchedAt(new Date());
+              }
               setParticipantIdInput(state.config.participantId || '');
               setTeamIdInput(state.config.teamId || '');
               saveStoredConfig(profile, state.config);
@@ -1779,7 +1836,9 @@ const App = () => {
               setTeamTotalRaised(data.teamTotalRaised || 0);
               setTeamName(data.teamName || '');
               if (data.conversionRate) setConversionRate(data.conversionRate);
-              saveStoredData(profile, data);
+              const fetchTime = data.lastFetchedAt ? new Date(data.lastFetchedAt) : new Date();
+              setLastFetchedAt(fetchTime);
+              saveStoredData(profile, { ...data, lastFetchedAt: fetchTime.getTime() });
           });
 
           socket.on('event:donation', (payload: any) => {
@@ -2389,15 +2448,22 @@ const App = () => {
           <>
             <div style={styles.header}>
                 <span>{t('appTitle')}</span>
-                {isStandaloneMode ? (
-                    <span style={{fontSize: '0.5em', color: config.successColor, display: 'block', marginTop: '6px', opacity: 0.9}}>
-                        ● {t('standaloneMode')}
-                    </span>
-                ) : !isConnected ? (
-                    <span style={{fontSize: '0.5em', color: config.errorColor, display: 'block', marginTop: '10px'}}>{t('disconnected')}</span>
-                ) : (
-                    <span style={{fontSize: '0.5em', color: config.successColor, display: 'block', marginTop: '5px', opacity: 0.7}}>● Connected</span>
-                )}
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginTop: '6px', flexWrap: 'wrap'}}>
+                    {isStandaloneMode ? (
+                        <span style={{fontSize: '0.5em', color: config.successColor, opacity: 0.9}}>
+                            ● {t('standaloneMode')}
+                        </span>
+                    ) : !isConnected ? (
+                        <span style={{fontSize: '0.5em', color: config.errorColor}}>{t('disconnected')}</span>
+                    ) : (
+                        <span style={{fontSize: '0.5em', color: config.successColor, opacity: 0.7}}>● Connected</span>
+                    )}
+                    {lastFetchedAt && (
+                        <span style={{fontSize: '0.45em', color: config.textColor, opacity: 0.75, fontFamily: 'monospace'}}>
+                            ⏱ {t('lastFetched')}: {formatLastFetched(lastFetchedAt)}
+                        </span>
+                    )}
+                </div>
             </div>
             
             {/* CURRENT PROFILE DISPLAY & CHANGE BUTTON */}

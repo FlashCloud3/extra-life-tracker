@@ -602,6 +602,7 @@ export async function fetchProfileData(profile) {
 
         await fetchProfileConversionRate(profile);
 
+        profile.data.lastFetchedAt = Date.now();
         profile.initialFetchComplete = true;
 
         // Broadcast Update to specific room
