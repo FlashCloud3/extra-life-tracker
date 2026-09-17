@@ -7,7 +7,7 @@ This document outlines all available features, configuration options, overlay ty
 ## 1. Core Configuration
 Located in the "Core Setup" section of the settings panel.
 
-*   **Language:** Switch the interface between **English** and **French**.
+*   **Language:** Switch the interface between **English** and **French** (all phrase definitions and custom language dictionaries are located in `translations.js`).
 *   **Participant ID:** Your specific Extra Life Participant ID (found in your fundraising page URL).
     *   *Note:* If you are using a specific ID loaded via the top switcher, this field is read-only.
 *   **Team ID:** Your Extra Life Team ID.

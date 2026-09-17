@@ -2,342 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createRoot } from 'react-dom/client';
 import { io, Socket } from 'socket.io-client';
 import tmi from 'tmi.js';
-
-// === LOCALIZATION ===
-const translations = {
-  en: {
-    appTitle: "Extra Life Tracker",
-    disconnected: "(Disconnected)",
-    showSettings: "Show Settings",
-    hideSettings: "Hide Settings",
-    coreSetup: "Core Setup",
-    language: "Language",
-    profile: "Extra Life ID",
-    switchProfile: "Load ID",
-    participantId: "Participant ID",
-    enterId: "Enter Extra Life ID",
-    autoDetect: "Auto-detect Team ID",
-    teamId: "Team ID",
-    refreshSeconds: "Refresh (seconds, min 60)",
-    currency: "Currency",
-    exchangeRate: "Exchange Rate",
-    customExchangeRate: "Custom Exchange Rate Multiplier",
-    customRateHelp: "Direct multiplier (leave blank for live rate)",
-    websiteTotalLabel: "Or Calculate from Extra Life Website Total (CAD)",
-    websiteTotalHelp: "Enter current CAD total shown on Extra Life to auto-calculate rate",
-    calculatedRateNotice: "Calculated using your API total of ${usd} USD",
-    clearExchangeRate: "Clear Custom Rate",
-    refreshRate: "Refresh",
-    twitchIntegration: "Twitch Integration",
-    twitchEnabled: "Enable Twitch Integration",
-    twitchChannel: "Channel Name",
-    twitchToken: "OAuth Token (oauth:xxxx)",
-    getTwitchToken: "Get OAuth Token",
-    twitchEnableAlerts: "Enable Chat Alerts",
-    twitchEnableCommands: "Enable Chat Commands",
-    chatCommands: "Chat Commands",
-    builtinCommands: "Built-in Commands",
-    customCommands: "Custom Commands",
-    commandTrigger: "Trigger (e.g. !discord)",
-    commandResponse: "Response",
-    addCommand: "Add Command",
-    noCommands: "No custom commands added.",
-    eventTiming: "Event & Timing",
-    eventStartTime: "Event Start Time",
-    celebrationDuration: "Celebration Duration (s)",
-    streamSchedule: "Stream Schedule",
-    description: "Description",
-    addItem: "Add Item",
-    undo: "Undo",
-    done: "Done",
-    delete: "Delete",
-    theming: "Theming",
-    simple: "Simple",
-    advanced: "Advanced",
-    fontFamily: "Font Family",
-    notificationAnimation: "Notification Animation",
-    colorPreset: "Color Preset",
-    custom: "Custom",
-    background: "Background",
-    panel: "Panel",
-    text: "Text",
-    accent1: "Accent 1",
-    accent2: "Accent 2",
-    border: "Border",
-    success: "Success",
-    error: "Error",
-    soundSettings: "Paramètres Audio",
-    enableSound: "Enable Sound",
-    volume: "Volume",
-    donationSound: "Donation Sound",
-    defaultCoin: "Default Coin",
-    milestoneSound: "Milestone Sound",
-    defaultFanfare: "Default Fanfare",
-    preview: "Preview",
-    customSoundLibrary: "Custom Sound Library",
-    uploadSound: "Upload Sound",
-    uploadNewSound: "Upload New Sound",
-    addSoundFromFolder: "Add Sound from App Folder",
-    noSoundsFound: "No files found in /sounds folder",
-    add: "Add",
-    soundFolderHint: "Put audio files in the \"sounds\" folder in your app directory.",
-    fileTooLarge: "File too large.",
-    sponsors: "Sponsors",
-    slideDuration: "Slide Duration (Seconds)",
-    noSponsorsAdded: "No sponsors added.",
-    addSponsorFromFolder: "Add Sponsor from App Folder",
-    noSponsorsFound: "No files found in /sponsors folder",
-    sponsorFolderHint: "Put images in the \"sponsors\" folder in your app directory.",
-    textOverlay: "Text Overlay",
-    selectTextFile: "Select Text File",
-    noTextFilesFound: "No files found in /text_files folder",
-    textFolderHint: "Put .txt files in the \"text_files\" folder in your app directory.",
-    saveSettings: "Save Settings",
-    saving: "Saving...",
-    overlayLinks: "Overlay Links",
-    progressBar: "Progress Bar",
-    notifications: "Notifications",
-    nextMilestone: "Next Milestone",
-    teamTracker: "Team Tracker",
-    celebration: "Celebration",
-    schedule: "Schedule",
-    sponsorsOverlay: "Sponsors",
-    textOverlayLink: "Text Display",
-    openPopup: "Open Popup",
-    copyLink: "Copy Link",
-    copied: "Copied!",
-    resyncData: "Resync Data",
-    testDonation: "Test Don (+$15)",
-    clearStop: "Clear & Stop All",
-    currentStats: "Current Stats",
-    totalRaised: "Total Raised",
-    teamRaised: "Team Raised",
-    lastDonator: "Last Donator",
-    lastFetched: "Last fetched from server",
-    justNow: "just now",
-    secondsAgo: "{s}s ago",
-    minutesAgo: "{m}m ago",
-    never: "Never",
-    none: "None",
-    donated: "donated",
-    goalReached: "Fundraising Goal Reached!",
-    nextGoal: "Next Goal",
-    goal: "Goal",
-    teamTotal: "Team Total",
-    allMilestonesComplete: "All Milestones Complete!",
-    startsIn: "Starts in: ",
-    timeElapsed: "Time Elapsed: ",
-    anonymous: "Anonymous",
-    noScheduleSet: "No schedule set!",
-    slideIn: "Slide In",
-    fadeIn: "Fade In",
-    bounceIn: "Bounce In",
-    zoomIn: "Zoom In",
-    recentDonations: "Recent Donations",
-    noDonations: "No donations yet.",
-    textAlignment: "Text Alignment",
-    topLeft: "Top Left",
-    topCenter: "Top Center",
-    topRight: "Top Right",
-    centerLeft: "Center Left",
-    center: "Center",
-    centerRight: "Center Right",
-    bottomLeft: "Bottom Left",
-    bottomCenter: "Bottom Center",
-    bottomRight: "Bottom Right",
-    fontSize: "Font Size (rem)",
-    welcomeTitle: "Welcome to Extra Life Tracker",
-    welcomeSubtitle: "Enter your Participant ID to begin setup.",
-    startTracking: "Start Tracking",
-    changeId: "Change ID",
-    idHint: "This ID will be used to save your settings and overlays.",
-    githubPagesMode: "GitHub Pages Mode",
-    standaloneMode: "Standalone Client (In-Browser)",
-    connectedServer: "Connected to Server",
-    connecting: "Connecting...",
-    defaultPowerup: "Default Power-Up",
-    defaultLaser: "Default Laser Blaster",
-    exportConfig: "Export Settings (JSON)",
-    importConfig: "Import Settings (JSON)",
-    importSuccess: "Settings loaded successfully!",
-    importError: "Invalid JSON configuration file.",
-    uploadSponsorImage: "Upload Sponsor Logo (File)",
-    sponsorUrl: "Or paste Sponsor Image URL",
-    addSponsorUrl: "Add URL",
-    customText: "Custom Text Content",
-    customTextHint: "Type your stream message, notes, or rules directly here. Displays live on the Text Overlay!",
-    uploadTextFile: "Upload .txt File",
-    directUrl: "Or remote Text URL (e.g. raw GitHub URL)",
-    loadUrl: "Fetch Text",
-    syncNote: "Running directly from GitHub Pages! Overlays, sounds, and settings sync across browser tabs and OBS sources locally."
-  },
-  fr: {
-    appTitle: "Suivi Extra Life",
-    disconnected: "(Déconnecté)",
-    showSettings: "Afficher les paramètres",
-    hideSettings: "Masquer les paramètres",
-    coreSetup: "Configuration principale",
-    language: "Langue",
-    profile: "ID Extra Life",
-    switchProfile: "Charger ID",
-    participantId: "ID Participant",
-    enterId: "Entrer ID Extra Life",
-    autoDetect: "Auto-détecter ID Équipe",
-    teamId: "ID Équipe",
-    refreshSeconds: "Rafraîchissement (secondes, min 60)",
-    currency: "Devise",
-    exchangeRate: "Taux de change",
-    customExchangeRate: "Multiplicateur de taux personnalisé",
-    customRateHelp: "Multiplicateur direct (laisser vide pour le taux en direct)",
-    websiteTotalLabel: "Ou calculer via le total du site Extra Life (CAD)",
-    websiteTotalHelp: "Entrez le montant CAD sur Extra Life pour calculer le taux",
-    calculatedRateNotice: "Calculé avec votre total API de {usd} $ USD",
-    clearExchangeRate: "Effacer le taux personnalisé",
-    refreshRate: "Actualiser",
-    twitchIntegration: "Intégration Twitch",
-    twitchEnabled: "Activer Intégration Twitch",
-    twitchChannel: "Nom de la chaîne",
-    twitchToken: "Jeton OAuth (oauth:xxxx)",
-    getTwitchToken: "Obtenir Jeton OAuth",
-    twitchEnableAlerts: "Activer les alertes chat",
-    twitchEnableCommands: "Activer les commandes chat",
-    chatCommands: "Commandes Chat",
-    builtinCommands: "Commandes Intégrées",
-    customCommands: "Commandes Personnalisées",
-    commandTrigger: "Déclencheur (ex: !discord)",
-    commandResponse: "Réponse",
-    addCommand: "Ajouter Commande",
-    noCommands: "Aucune commande personnalisée.",
-    eventTiming: "Événement & Timing",
-    eventStartTime: "Heure de début",
-    celebrationDuration: "Durée Célébration (s)",
-    streamSchedule: "Programme du Stream",
-    description: "Description",
-    addItem: "Ajouter",
-    undo: "Annuler",
-    done: "Fait",
-    delete: "Supprimer",
-    theming: "Thème",
-    simple: "Simple",
-    advanced: "Avancé",
-    fontFamily: "Police",
-    notificationAnimation: "Animation Notification",
-    colorPreset: "Préréglage de couleurs",
-    custom: "Personnalisé",
-    background: "Arrière-plan",
-    panel: "Panneau",
-    text: "Texte",
-    accent1: "Accent 1",
-    accent2: "Accent 2",
-    border: "Bordure",
-    success: "Succès",
-    error: "Erreur",
-    soundSettings: "Paramètres Audio",
-    enableSound: "Activer le son",
-    volume: "Volume",
-    donationSound: "Son de don",
-    defaultCoin: "Pièce par défaut",
-    milestoneSound: "Son d'étape",
-    defaultFanfare: "Fanfare par défaut",
-    preview: "Aperçu",
-    customSoundLibrary: "Bibliothèque de sons",
-    uploadSound: "Télécharger un son",
-    uploadNewSound: "Uploader nouveau son",
-    addSoundFromFolder: "Ajouter son du dossier App",
-    noSoundsFound: "Aucun fichier dans le dossier /sounds",
-    add: "Ajouter",
-    soundFolderHint: "Placez les fichiers audio dans le dossier \"sounds\" de votre application.",
-    fileTooLarge: "Fichier trop volumineux.",
-    sponsors: "Sponsors",
-    slideDuration: "Durée diapositive (Secondes)",
-    noSponsorsAdded: "Aucun sponsor ajouté.",
-    addSponsorFromFolder: "Ajouter sponsor du dossier App",
-    noSponsorsFound: "Aucun fichier dans le dossier /sponsors",
-    sponsorFolderHint: "Placez les images dans le dossier \"sponsors\" de votre application.",
-    textOverlay: "Overlay Texte",
-    selectTextFile: "Sélectionner fichier texte",
-    noTextFilesFound: "Aucun fichier dans le dossier /text_files",
-    textFolderHint: "Placez les fichiers .txt dans le dossier \"text_files\" de votre application.",
-    saveSettings: "Enregistrer",
-    saving: "Enregistrement...",
-    overlayLinks: "Liens Overlay",
-    progressBar: "Barre de progression",
-    notifications: "Notifications",
-    nextMilestone: "Prochaine étape",
-    teamTracker: "Suivi d'équipe",
-    celebration: "Célébration",
-    schedule: "Programme",
-    sponsorsOverlay: "Sponsors",
-    textOverlayLink: "Affichage Texte",
-    openPopup: "Ouvrir Popup",
-    copyLink: "Copier Lien",
-    copied: "Copié !",
-    resyncData: "Resynchroniser",
-    testDonation: "Test Don (+$15)",
-    clearStop: "Effacer & Arrêter tout",
-    currentStats: "Statistiques actuelles",
-    totalRaised: "Total récolté",
-    teamRaised: "Total équipe",
-    lastDonator: "Dernier donateur",
-    lastFetched: "Dernière mise à jour du serveur",
-    justNow: "à l'instant",
-    secondsAgo: "il y a {s}s",
-    minutesAgo: "il y a {m}m",
-    never: "Jamais",
-    none: "Aucun",
-    donated: "a donné",
-    goalReached: "Objectif de collecte atteint !",
-    nextGoal: "Prochain Objectif",
-    goal: "Objectif",
-    teamTotal: "Total Équipe",
-    allMilestonesComplete: "Toutes les étapes terminées !",
-    startsIn: "Commence dans : ",
-    timeElapsed: "Temps écoulé : ",
-    anonymous: "Anonyme",
-    noScheduleSet: "Aucun programme défini !",
-    slideIn: "Glisser",
-    fadeIn: "Fondu",
-    bounceIn: "Rebond",
-    zoomIn: "Zoom",
-    recentDonations: "Dons Récents",
-    noDonations: "Pas encore de dons.",
-    textAlignment: "Alignement du texte",
-    topLeft: "Haut Gauche",
-    topCenter: "Haut Centre",
-    topRight: "Haut Droite",
-    centerLeft: "Centre Gauche",
-    center: "Centre",
-    centerRight: "Centre Droite",
-    bottomLeft: "Bas Gauche",
-    bottomCenter: "Bas Centre",
-    bottomRight: "Bas Droite",
-    fontSize: "Taille de police (rem)",
-    welcomeTitle: "Bienvenue sur Extra Life Tracker",
-    welcomeSubtitle: "Entrez votre ID Participant pour commencer.",
-    startTracking: "Commencer le suivi",
-    changeId: "Changer ID",
-    idHint: "Cet ID sera utilisé pour sauvegarder vos paramètres et overlays.",
-    githubPagesMode: "Mode GitHub Pages",
-    standaloneMode: "Client Autonome (Dans le Navigateur)",
-    connectedServer: "Connecté au Serveur",
-    connecting: "Connexion en cours...",
-    defaultPowerup: "Power-Up par défaut",
-    defaultLaser: "Laser par défaut",
-    exportConfig: "Exporter Paramètres (JSON)",
-    importConfig: "Importer Paramètres (JSON)",
-    importSuccess: "Paramètres chargés avec succès !",
-    importError: "Fichier de configuration JSON invalide.",
-    uploadSponsorImage: "Uploader Logo Sponsor (Fichier)",
-    sponsorUrl: "Ou coller l'URL d'une image",
-    addSponsorUrl: "Ajouter URL",
-    customText: "Contenu texte personnalisé",
-    customTextHint: "Tapez votre message de stream, notes ou règles directement ici. S'affiche en direct sur l'Overlay Texte !",
-    uploadTextFile: "Uploader Fichier .txt",
-    directUrl: "Ou URL de fichier texte distant",
-    loadUrl: "Charger Texte",
-    syncNote: "Exécution directe depuis GitHub Pages ! Overlays, sons et paramètres se synchronisent localement."
-  }
-};
+import { translations } from './translations.js';
 
 // === COLOR PRESETS ===
 const COLOR_PRESETS = {
@@ -589,7 +254,7 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
     );
 };
 
-const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, accentColor1, alignment = 'top-left', fontSize = 1.5 }: any) => {
+const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, accentColor1, alignment = 'top-left', fontSize = 1.5, t }: any) => {
     const [content, setContent] = useState(customText || '');
 
     useEffect(() => {
@@ -598,7 +263,7 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
             return;
         }
         if (!filename) {
-            setContent('No text configured');
+            setContent(t ? t('noTextConfigured') : 'No text configured');
             return;
         }
 
@@ -614,7 +279,7 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
                 .then(text => setContent(text))
                 .catch(err => {
                     console.error(err);
-                    setContent(`Error loading ${filename}`);
+                    setContent(t ? t('errorLoadingFile', { filename }) : `Error loading ${filename}`);
                 });
         };
 
@@ -1998,7 +1663,7 @@ const App = () => {
         setCopyFeedback(type);
         setTimeout(() => setCopyFeedback(null), 2000);
     }).catch(err => {
-        setFormError('Failed to copy URL.');
+        setFormError(t('failedToCopyUrl'));
     });
   };
 
@@ -2220,7 +1885,7 @@ const App = () => {
       if (!sponsorUrlInput.trim()) return;
       const newSponsor: Sponsor = {
           id: `sp-${Date.now()}`,
-          name: sponsorNameInput.trim() || 'Sponsor',
+          name: sponsorNameInput.trim() || t('sponsorDefaultName'),
           imageUrl: sponsorUrlInput.trim()
       };
       updateConfig({ sponsors: [...config.sponsors, newSponsor] });
@@ -2419,7 +2084,7 @@ const App = () => {
                 </form>
 
                 <div style={{marginTop: '30px', fontSize: '0.8rem', color: config.textColor, opacity: 0.7}}>
-                    {isStandaloneMode ? `● ${t('standaloneMode')}` : (isConnected ? `● Connected to Server` : `○ Connecting...`)}
+                    {isStandaloneMode ? `● ${t('standaloneMode')}` : (isConnected ? `● ${t('connectedServer')}` : `○ ${t('connecting')}`)}
                 </div>
             </div>
         </div>
@@ -2456,7 +2121,7 @@ const App = () => {
                     ) : !isConnected ? (
                         <span style={{fontSize: '0.5em', color: config.errorColor}}>{t('disconnected')}</span>
                     ) : (
-                        <span style={{fontSize: '0.5em', color: config.successColor, opacity: 0.7}}>● Connected</span>
+                        <span style={{fontSize: '0.5em', color: config.successColor, opacity: 0.7}}>● {t('connected')}</span>
                     )}
                     {lastFetchedAt && (
                         <span style={{fontSize: '0.45em', color: config.textColor, opacity: 0.75, fontFamily: 'monospace'}}>
@@ -2592,7 +2257,7 @@ const App = () => {
                                 }} 
                                 placeholder={t('enterId')}
                                 readOnly={currentProfile !== 'default'}
-                                title={currentProfile !== 'default' ? 'Managed by the loaded Profile ID' : ''}
+                                title={currentProfile !== 'default' ? t('managedByProfile') : ''}
                             />
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2657,7 +2322,7 @@ const App = () => {
                                                         fetchConversionRate(true);
                                                     }}
                                                     style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: hexToRgba(config.panelBorderColor, 0.2), border: `1px solid ${config.panelBorderColor}`, color: config.textColor }}
-                                                    title="Clear custom rates and return to live rate"
+                                                    title={t('clearRateTitle')}
                                                 >
                                                     ✕ {t('clearExchangeRate')}
                                                 </button>
@@ -2670,9 +2335,9 @@ const App = () => {
                                                     fetchConversionRate(true);
                                                 }}
                                                 style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.accentColor2 }}
-                                                title="Fetch latest live API exchange rate"
+                                                title={t('refreshRateTitle')}
                                             >
-                                                ↻ {t('refreshRate')} (Live)
+                                                ↻ {t('refreshRate')} ({t('live')})
                                             </button>
                                         </div>
                                     </div>
@@ -2685,7 +2350,7 @@ const App = () => {
                                         type="number"
                                         step="0.0001"
                                         value={config.customExchangeRate === 0 || !config.customExchangeRate ? '' : config.customExchangeRate}
-                                        placeholder={`Live rate (~${conversionRate > 1 ? conversionRate.toFixed(4) : '1.36'})`}
+                                        placeholder={t('liveRatePlaceholder', { rate: conversionRate > 1 ? conversionRate.toFixed(4) : '1.36' })}
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setWebsiteTotalInput('');
@@ -2805,9 +2470,9 @@ const App = () => {
                                     <div style={{ marginBottom: '15px' }}>
                                         <h5 style={{ color: config.accentColor1, margin: '0 0 5px 0', fontSize: '0.9rem' }}>{t('builtinCommands')}</h5>
                                         <ul style={{ color: config.textColor, fontSize: '0.85rem', margin: 0, paddingLeft: '20px', opacity: 0.8, textAlign: 'left' }}>
-                                            <li><strong>!total</strong> - Current raised amount</li>
-                                            <li><strong>!goal</strong> - Current fundraising goal</li>
-                                            <li><strong>!milestone</strong> - Next milestone info</li>
+                                            <li><strong>!total</strong> - {t('builtinTotalDesc')}</li>
+                                            <li><strong>!goal</strong> - {t('builtinGoalDesc')}</li>
+                                            <li><strong>!milestone</strong> - {t('builtinMilestoneDesc')}</li>
                                         </ul>
                                     </div>
 
@@ -3271,7 +2936,7 @@ const App = () => {
             {overlayType === 'celebration' && <CelebrationOverlay playSound={playSpecificSound} accentColor1={config.accentColor1} accentColor2={config.accentColor2} successColor={config.successColor} celebrationDuration={config.celebrationDuration} activeCelebrationKey={celebrationKey} />}
             {overlayType === 'schedule' && <ScheduleOverlay items={config.scheduleItems} styles={styles} accentColor1={config.accentColor1} accentColor2={config.accentColor2} textColor={config.textColor} fontFamily={config.fontFamily} t={t} />}
             {overlayType === 'sponsors' && <SponsorOverlay sponsors={config.sponsors} styles={styles} animationDuration={config.sponsorDisplayDuration} t={t} />}
-            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} />}
+            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} t={t} />}
           </>
         )}
       </div>
