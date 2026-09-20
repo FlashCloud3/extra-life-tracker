@@ -164,7 +164,642 @@ const TeamOverlay = ({ styles, currencyPrefix, convertAmount, teamTotalRaised, s
     );
 };
 
-const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor, fontFamily, t }: { items: any[], styles: any, accentColor1: string, accentColor2: string, textColor: string, fontFamily: string, t: any }) => {
+interface TeamDashboardViewProps {
+  styles: any;
+  config: any;
+  currencyPrefix: string;
+  convertAmount: (amount: number) => number;
+  teamTotalRaised: number;
+  teamGoal: number;
+  teamName: string;
+  teamDonations: any[];
+  teamParticipants: any[];
+  participantId: string;
+  participantName: string;
+  participantDonations: Donation[];
+  participantTotalRaised: number;
+  participantGoal: number;
+  selectedAccountId: string;
+  setSelectedAccountId: (id: string) => void;
+  t: (key: string, vars?: any) => string;
+  isOverlay?: boolean;
+  effHeaderColor: string;
+  effSecondaryTextColor: string;
+  effPrimaryButtonBgColor: string;
+  effSecondaryButtonBgColor: string;
+  effDividerColor: string;
+  effHighlightColor: string;
+  effDonorNameColor: string;
+  effProgressBarColor: string;
+  hexToRgba: (hex: string, alpha: number) => string;
+  lastFetchedAt: Date | null;
+  onManualSync?: () => void;
+}
+
+const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
+  styles,
+  config,
+  currencyPrefix,
+  convertAmount,
+  teamTotalRaised,
+  teamGoal,
+  teamName,
+  teamDonations,
+  teamParticipants,
+  participantId,
+  participantName,
+  participantDonations,
+  participantTotalRaised,
+  participantGoal,
+  selectedAccountId,
+  setSelectedAccountId,
+  t,
+  isOverlay = false,
+  effHeaderColor,
+  effSecondaryTextColor,
+  effPrimaryButtonBgColor,
+  effSecondaryButtonBgColor,
+  effDividerColor,
+  effHighlightColor,
+  effDonorNameColor,
+  effProgressBarColor,
+  hexToRgba,
+  lastFetchedAt,
+  onManualSync,
+}) => {
+  const [teamSearch, setTeamSearch] = useState('');
+  const [accountSearch, setAccountSearch] = useState('');
+  const [fetchedAccounts, setFetchedAccounts] = useState<Record<string, { donations: any[]; total: number; goal: number; name: string }>>({});
+  const [loadingAccount, setLoadingAccount] = useState(false);
+
+  // Active account ID defaults to the current participantId
+  const activeAccountId = selectedAccountId || String(participantId || '');
+
+  // Asynchronously fetch extra data for a team member if chosen
+  useEffect(() => {
+    if (!activeAccountId || activeAccountId === String(participantId)) return;
+    if (fetchedAccounts[activeAccountId]) return;
+
+    let isMounted = true;
+    setLoadingAccount(true);
+
+    Promise.all([
+      fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]).then(([partRes, donRes]) => {
+      if (isMounted) {
+        setFetchedAccounts(prev => ({
+          ...prev,
+          [activeAccountId]: {
+            donations: Array.isArray(donRes) ? donRes : [],
+            total: partRes?.sumDonations ?? 0,
+            goal: partRes?.fundraisingGoal ?? 0,
+            name: partRes?.displayName || ''
+          }
+        }));
+        setLoadingAccount(false);
+      }
+    }).catch(() => {
+      if (isMounted) setLoadingAccount(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [activeAccountId, participantId]);
+
+  // Resolve active account details
+  const activeMemberFromTeam = teamParticipants.find(p => String(p.participantID) === activeAccountId);
+  const activeFetched = fetchedAccounts[activeAccountId];
+
+  const activeAccountName = activeAccountId === String(participantId)
+    ? (participantName || t('specificAccount'))
+    : (activeFetched?.name || activeMemberFromTeam?.displayName || `Account ${activeAccountId}`);
+
+  const activeAccountTotal = activeAccountId === String(participantId)
+    ? participantTotalRaised
+    : (activeFetched?.total ?? (activeMemberFromTeam?.sumDonations ?? 0));
+
+  const activeAccountGoal = activeAccountId === String(participantId)
+    ? participantGoal
+    : (activeFetched?.goal ?? (activeMemberFromTeam?.fundraisingGoal ?? 0));
+
+  // Resolve donations for active account
+  const rawAccountDonations = useMemo(() => {
+    if (activeAccountId === String(participantId)) {
+      if (participantDonations && participantDonations.length > 0) {
+        return participantDonations;
+      }
+      return teamDonations.filter(d => String(d.participantID) === String(participantId) || (participantName && d.recipientName === participantName));
+    }
+    if (activeFetched?.donations && activeFetched.donations.length > 0) {
+      return activeFetched.donations;
+    }
+    return teamDonations.filter(d => 
+      String(d.participantID) === activeAccountId || 
+      (activeMemberFromTeam && d.recipientName === activeMemberFromTeam.displayName)
+    );
+  }, [activeAccountId, participantId, participantDonations, teamDonations, participantName, activeFetched, activeMemberFromTeam]);
+
+  // Filtered team donations
+  const filteredTeamDonations = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    if (!q) return teamDonations;
+    return teamDonations.filter(d => {
+      const donor = (d.displayName || t('anonymous')).toLowerCase();
+      const recipient = (d.recipientName || '').toLowerCase();
+      const msg = (d.message || '').toLowerCase();
+      const amt = String(d.amount);
+      return donor.includes(q) || recipient.includes(q) || msg.includes(q) || amt.includes(q);
+    });
+  }, [teamDonations, teamSearch, t]);
+
+  // Filtered account donations
+  const filteredAccountDonations = useMemo(() => {
+    const q = accountSearch.trim().toLowerCase();
+    if (!q) return rawAccountDonations;
+    return rawAccountDonations.filter(d => {
+      const donor = (d.displayName || t('anonymous')).toLowerCase();
+      const msg = (d.message || '').toLowerCase();
+      const amt = String(d.amount);
+      return donor.includes(q) || msg.includes(q) || amt.includes(q);
+    });
+  }, [rawAccountDonations, accountSearch, t]);
+
+  // Progress calculations
+  const teamProgress = teamGoal > 0 ? Math.min(100, (teamTotalRaised / teamGoal) * 100) : 0;
+  const accountProgress = activeAccountGoal > 0 ? Math.min(100, (activeAccountTotal / activeAccountGoal) * 100) : 0;
+  const accountContribution = teamTotalRaised > 0 ? Math.min(100, (activeAccountTotal / teamTotalRaised) * 100) : 0;
+
+  return (
+    <div style={{
+      width: '100%',
+      maxWidth: isOverlay ? '100%' : '1400px',
+      margin: '0 auto',
+      padding: isOverlay ? '16px' : '0',
+      boxSizing: 'border-box' as const,
+      fontFamily: config.fontFamily
+    }}>
+      {/* HERO STATS SECTION */}
+      <div style={styles.statHero}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.95rem', color: effHighlightColor, fontWeight: 'bold' }}>
+            👥 {teamName || t('teamDashboard')}
+          </span>
+          {lastFetchedAt && (
+            <span style={{ fontSize: '0.8rem', opacity: 0.7, color: effSecondaryTextColor }}>
+              • {t('live')}: {lastFetchedAt.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+
+        <h2 style={styles.bigStat}>
+          {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </h2>
+
+        <p style={styles.secondaryStat}>
+          {teamGoal > 0 
+            ? `${t('teamGoal')}: ${currencyPrefix}${convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${teamProgress.toFixed(1)}%)`
+            : `${t('totalDonations')}: ${teamDonations.length}`
+          }
+        </p>
+
+        {teamGoal > 0 && (
+          <div style={styles.progressBarContainer}>
+            <div style={{ ...styles.progressBar, width: `${teamProgress}%`, backgroundColor: effProgressBarColor }}>
+              <span style={styles.progressText}>{teamProgress.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4 SUMMARY METRIC TILES */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '1rem',
+        marginBottom: '1.5rem',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{ ...styles.card, textAlign: 'center', padding: '14px' }}>
+          <span style={{ fontSize: '0.8rem', color: effSecondaryTextColor, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {t('totalDonationsCount')}
+          </span>
+          <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: effHighlightColor, marginTop: '4px' }}>
+            {teamDonations.length}
+          </span>
+        </div>
+
+        <div style={{ ...styles.card, textAlign: 'center', padding: '14px' }}>
+          <span style={{ fontSize: '0.8rem', color: effSecondaryTextColor, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {t('teamMembersCount')}
+          </span>
+          <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: effHighlightColor, marginTop: '4px' }}>
+            {teamParticipants.length}
+          </span>
+        </div>
+
+        <div style={{ ...styles.card, textAlign: 'center', padding: '14px' }}>
+          <span style={{ fontSize: '0.8rem', color: effSecondaryTextColor, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {t('specificAccount')}
+          </span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: config.textColor, marginTop: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {activeAccountName}
+          </span>
+        </div>
+
+        <div style={{ ...styles.card, textAlign: 'center', padding: '14px' }}>
+          <span style={{ fontSize: '0.8rem', color: effSecondaryTextColor, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {t('accountTotalRaised')}
+          </span>
+          <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: config.successColor, marginTop: '4px' }}>
+            {currencyPrefix}{convertAmount(activeAccountTotal).toFixed(2)}
+            <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: '6px', color: effSecondaryTextColor }}>
+              ({accountContribution.toFixed(1)}%)
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* 2 COLUMNS LAYOUT */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+        gap: '20px',
+        width: '100%',
+        alignItems: 'start'
+      }}>
+        {/* COLUMN 1: ALL DONATIONS RECEIVED BY THE TEAM */}
+        <div style={{
+          ...styles.card,
+          border: `2px solid ${effHighlightColor}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          padding: '16px'
+        }}>
+          {/* Column 1 Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+            borderBottom: `1px dashed ${effDividerColor}`,
+            paddingBottom: '10px'
+          }}>
+            <h3 style={{ margin: 0, color: effHeaderColor, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👥 {t('teamDonations')}
+            </h3>
+            <span style={{
+              fontSize: '0.8rem',
+              backgroundColor: hexToRgba(effHighlightColor, 0.15),
+              color: effHighlightColor,
+              padding: '3px 10px',
+              borderRadius: '12px',
+              fontWeight: 'bold'
+            }}>
+              {filteredTeamDonations.length} {t('donations')}
+            </span>
+          </div>
+
+          {/* Search Filter for Team Donations */}
+          <div>
+            <input
+              type="text"
+              id="input-team-donations-filter"
+              value={teamSearch}
+              onChange={e => setTeamSearch(e.target.value)}
+              placeholder={t('searchDonations')}
+              style={{
+                ...styles.input,
+                fontSize: '0.85rem',
+                padding: '8px 12px',
+                width: '100%',
+                boxSizing: 'border-box' as const
+              }}
+            />
+          </div>
+
+          {/* Team Donations Feed */}
+          <div style={{
+            maxHeight: isOverlay ? 'calc(100vh - 430px)' : '650px',
+            minHeight: '260px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            paddingRight: '4px'
+          }}>
+            {filteredTeamDonations.length === 0 ? (
+              <div style={{ padding: '30px 10px', textAlign: 'center', opacity: 0.7, color: config.textColor }}>
+                <p style={{ margin: 0 }}>{t('noTeamDonations')}</p>
+              </div>
+            ) : (
+              filteredTeamDonations.map((d: any) => {
+                const isAnonymous = !d.displayName || d.displayName.toLowerCase() === 'anonymous';
+                const donorTitle = isAnonymous ? t('anonymous') : d.displayName;
+                const formattedDate = d.createdDateUTC ? new Date(d.createdDateUTC).toLocaleString() : '';
+
+                return (
+                  <div
+                    key={d.donationID || `${d.createdDateUTC}-${d.amount}`}
+                    style={{
+                      backgroundColor: hexToRgba(config.panelColor, 0.75),
+                      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.35)}`,
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        color: effDonorNameColor,
+                        fontWeight: 'bold',
+                        fontSize: '0.95rem',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {donorTitle}
+                      </span>
+                      <span style={{
+                        color: config.successColor,
+                        fontWeight: 'bold',
+                        fontSize: '1rem',
+                        flexShrink: 0
+                      }}>
+                        {currencyPrefix}{convertAmount(d.amount).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '4px',
+                      marginTop: '6px',
+                      fontSize: '0.8rem',
+                      color: effSecondaryTextColor
+                    }}>
+                      <span>
+                        🎯 {t('forRecipient')} <strong>{d.recipientName || teamName || 'Team'}</strong>
+                      </span>
+                      {formattedDate && (
+                        <span style={{ fontFamily: 'monospace', opacity: 0.7, fontSize: '0.75rem' }}>
+                          {formattedDate}
+                        </span>
+                      )}
+                    </div>
+
+                    {d.message && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '6px 10px',
+                        backgroundColor: hexToRgba(config.backgroundColor, 0.4),
+                        borderRadius: '6px',
+                        fontStyle: 'italic',
+                        fontSize: '0.85rem',
+                        color: config.textColor,
+                        lineHeight: 1.4,
+                        borderLeft: `2px solid ${effHighlightColor}`
+                      }}>
+                        "{d.message}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* COLUMN 2: ONE FOR A SPECIFIC ACCOUNT */}
+        <div style={{
+          ...styles.card,
+          border: `2px solid ${effHighlightColor}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          padding: '16px'
+        }}>
+          {/* Column 2 Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+            borderBottom: `1px dashed ${effDividerColor}`,
+            paddingBottom: '10px'
+          }}>
+            <h3 style={{ margin: 0, color: effHeaderColor, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👤 {t('accountDonations')}
+            </h3>
+            <span style={{
+              fontSize: '0.8rem',
+              backgroundColor: hexToRgba(effHighlightColor, 0.15),
+              color: effHighlightColor,
+              padding: '3px 10px',
+              borderRadius: '12px',
+              fontWeight: 'bold'
+            }}>
+              {filteredAccountDonations.length} {t('donations')}
+            </span>
+          </div>
+
+          {/* Account Selector Dropdown */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label htmlFor="select-account" style={{ fontSize: '0.8rem', color: effSecondaryTextColor, fontWeight: 'bold' }}>
+              {t('selectAccount')}:
+            </label>
+            <select
+              id="select-account"
+              value={activeAccountId}
+              onChange={e => setSelectedAccountId(e.target.value)}
+              style={{
+                ...styles.input,
+                fontSize: '0.85rem',
+                padding: '8px 12px',
+                width: '100%',
+                backgroundColor: config.panelColor,
+                color: config.textColor,
+                cursor: 'pointer'
+              }}
+            >
+              {/* Option 1: Profile participant */}
+              {participantId && (
+                <option value={String(participantId)}>
+                  ⭐ {participantName || 'My Profile'} (ID: {participantId}) - {currencyPrefix}{convertAmount(participantTotalRaised).toFixed(2)}
+                </option>
+              )}
+              {/* Team participants */}
+              {teamParticipants
+                .filter(p => String(p.participantID) !== String(participantId))
+                .map(p => (
+                  <option key={p.participantID} value={String(p.participantID)}>
+                    {p.displayName || `ID ${p.participantID}`} (ID: {p.participantID}) - {currencyPrefix}{convertAmount(p.sumDonations || 0).toFixed(2)}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Active Account Overview Card */}
+          <div style={{
+            backgroundColor: hexToRgba(effPrimaryButtonBgColor, 0.1),
+            border: `1px solid ${hexToRgba(effHighlightColor, 0.3)}`,
+            borderRadius: '8px',
+            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+              <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: config.textColor }}>
+                {activeAccountName}
+                {loadingAccount && <span style={{ fontSize: '0.75rem', opacity: 0.6, marginLeft: '6px' }}>({t('connecting')})</span>}
+              </span>
+              <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: config.successColor }}>
+                {currencyPrefix}{convertAmount(activeAccountTotal).toFixed(2)}
+              </span>
+            </div>
+
+            {activeAccountGoal > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: effSecondaryTextColor, marginBottom: '4px' }}>
+                  <span>{t('goal')}: {currencyPrefix}{convertAmount(activeAccountGoal).toFixed(2)}</span>
+                  <span>{accountProgress.toFixed(1)}%</span>
+                </div>
+                <div style={{
+                  height: '8px',
+                  backgroundColor: config.progressBarBgColor || '#222',
+                  borderRadius: '4px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    width: `${accountProgress}%`,
+                    height: '100%',
+                    backgroundColor: effProgressBarColor,
+                    transition: 'width 0.4s ease'
+                  }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Search Filter for Account Donations */}
+          <div>
+            <input
+              type="text"
+              id="input-account-donations-filter"
+              value={accountSearch}
+              onChange={e => setAccountSearch(e.target.value)}
+              placeholder={t('searchDonations')}
+              style={{
+                ...styles.input,
+                fontSize: '0.85rem',
+                padding: '8px 12px',
+                width: '100%',
+                boxSizing: 'border-box' as const
+              }}
+            />
+          </div>
+
+          {/* Account Donations Feed */}
+          <div style={{
+            maxHeight: isOverlay ? 'calc(100vh - 540px)' : '530px',
+            minHeight: '220px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            paddingRight: '4px'
+          }}>
+            {filteredAccountDonations.length === 0 ? (
+              <div style={{ padding: '30px 10px', textAlign: 'center', opacity: 0.7, color: config.textColor }}>
+                <p style={{ margin: 0 }}>{t('noAccountDonations')}</p>
+              </div>
+            ) : (
+              filteredAccountDonations.map((d: any) => {
+                const isAnonymous = !d.displayName || d.displayName.toLowerCase() === 'anonymous';
+                const donorTitle = isAnonymous ? t('anonymous') : d.displayName;
+                const formattedDate = d.createdDateUTC ? new Date(d.createdDateUTC).toLocaleString() : '';
+
+                return (
+                  <div
+                    key={d.donationID || `${d.createdDateUTC}-${d.amount}`}
+                    style={{
+                      backgroundColor: hexToRgba(config.panelColor, 0.75),
+                      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.35)}`,
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        color: effDonorNameColor,
+                        fontWeight: 'bold',
+                        fontSize: '0.95rem',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {donorTitle}
+                      </span>
+                      <span style={{
+                        color: config.successColor,
+                        fontWeight: 'bold',
+                        fontSize: '1rem',
+                        flexShrink: 0
+                      }}>
+                        {currencyPrefix}{convertAmount(d.amount).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {formattedDate && (
+                      <div style={{
+                        marginTop: '6px',
+                        fontSize: '0.75rem',
+                        color: effSecondaryTextColor,
+                        fontFamily: 'monospace',
+                        opacity: 0.7
+                      }}>
+                        {formattedDate}
+                      </div>
+                    )}
+
+                    {d.message && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '6px 10px',
+                        backgroundColor: hexToRgba(config.backgroundColor, 0.4),
+                        borderRadius: '6px',
+                        fontStyle: 'italic',
+                        fontSize: '0.85rem',
+                        color: config.textColor,
+                        lineHeight: 1.4,
+                        borderLeft: `2px solid ${effHighlightColor}`
+                      }}>
+                        "{d.message}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor, fontFamily, t, timeColor, dividerColor, headerColor }: { items: any[], styles: any, accentColor1?: string, accentColor2?: string, textColor: string, fontFamily: string, t: any, timeColor?: string, dividerColor?: string, headerColor?: string }) => {
+    const effTimeColor = timeColor || accentColor1 || '#ff00ff';
+    const effDivColor = dividerColor || accentColor2 || '#00ffff';
+    const effHColor = headerColor || accentColor1 || '#ff00ff';
+
     if (!items || items.length === 0) {
         return <div style={{...styles.progressBarContainer, textAlign: 'center', padding: '20px'}}>
             <h2 style={{...styles.milestoneDescription}}>{t('noScheduleSet')}</h2>
@@ -172,7 +807,7 @@ const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor,
     }
     return (
         <div style={{...styles.progressBarContainer, padding: '20px'}}>
-            <h2 style={{...styles.milestoneDescription, textAlign: 'center', borderBottom: `2px solid ${accentColor2}`, paddingBottom: '10px', marginBottom: '10px' }}>{t('streamSchedule')}</h2>
+            <h2 style={{...styles.milestoneDescription, textAlign: 'center', borderBottom: `2px solid ${effDivColor}`, paddingBottom: '10px', marginBottom: '10px', color: effHColor }}>{t('streamSchedule')}</h2>
             <div style={{ maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
                 {items.map(item => {
                     const date = new Date(item.time);
@@ -185,14 +820,14 @@ const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor,
                             display: 'flex',
                             gap: '15px',
                             padding: '8px 5px',
-                            borderBottom: `1px dashed ${accentColor2}`,
+                            borderBottom: `1px dashed ${effDivColor}`,
                             opacity: item.isDone ? 0.6 : 1,
                             textDecoration: item.isDone ? 'line-through' : 'none',
                             transition: 'opacity 0.3s ease, text-decoration 0.3s ease',
                             alignItems: 'baseline',
                             flexWrap: 'wrap'
                         }}>
-                            <span style={{ color: accentColor1, flexShrink: 0, minWidth: '160px', whiteSpace: 'nowrap', fontFamily }}>{timeDisplay}</span>
+                            <span style={{ color: effTimeColor, flexShrink: 0, minWidth: '160px', whiteSpace: 'nowrap', fontFamily }}>{timeDisplay}</span>
                             <span style={{ color: textColor, flexGrow: 1, fontFamily }}>{item.description}</span>
                         </div>
                     );
@@ -254,8 +889,9 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
     );
 };
 
-const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, accentColor1, alignment = 'top-left', fontSize = 1.5, t }: any) => {
+const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, accentColor1, highlightColor, alignment = 'top-left', fontSize = 1.5, t }: any) => {
     const [content, setContent] = useState(customText || '');
+    const effTextHighlightColor = highlightColor || accentColor1;
 
     useEffect(() => {
         if (customText) {
@@ -367,7 +1003,7 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
                 textAlign: alignStyle.textAlign as any,
                 fontSize: `${fontSize}rem`,
                 margin: 0,
-                color: accentColor1,
+                color: effTextHighlightColor,
                 fontFamily: fontFamily, // Ensure pre tag uses the theme font
                 maxWidth: '100%',
                 maxHeight: '100%',
@@ -480,8 +1116,10 @@ const Confetti = ({ colors, triggerKey, duration, debug = false }: { colors: str
     );
 };
   
-const CelebrationOverlay = ({ playSound, accentColor1, accentColor2, successColor, celebrationDuration, activeCelebrationKey }: any) => {
-    const colors = useMemo(() => [accentColor1, accentColor2, successColor], [accentColor1, accentColor2, successColor]);
+const CelebrationOverlay = ({ playSound, accentColor1, accentColor2, primaryColor, secondaryColor, successColor, celebrationDuration, activeCelebrationKey }: any) => {
+    const c1 = primaryColor || accentColor1;
+    const c2 = secondaryColor || accentColor2;
+    const colors = useMemo(() => [c1, c2, successColor], [c1, c2, successColor]);
 
     return (
         <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
@@ -571,6 +1209,40 @@ const App = () => {
       response: string;
   };
 
+  type SavedThemeProfile = {
+      id: string;
+      name: string;
+      colors: {
+          backgroundColor: string;
+          textColor: string;
+          panelColor: string;
+          panelBorderColor: string;
+          accentColor1: string;
+          accentColor2: string;
+          successColor: string;
+          errorColor: string;
+          buttonTextColor?: string;
+          headerColor?: string;
+          secondaryTextColor?: string;
+          primaryButtonBgColor?: string;
+          secondaryButtonBgColor?: string;
+          dividerColor?: string;
+          highlightColor?: string;
+          donorNameColor?: string;
+          progressBarColor?: string;
+          progressBarBgColor?: string;
+          progressBarTextColor?: string;
+          toastBgColor?: string;
+          toastBorderColor?: string;
+          toastNameColor?: string;
+          toastAmountColor?: string;
+          inputBgColor?: string;
+          inputBorderColor?: string;
+      };
+      fontFamily?: string;
+      notificationAnimation?: string;
+  };
+
   // === HELPERS ===
   const hexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -597,11 +1269,26 @@ const App = () => {
   const MAX_VISIBLE_TOASTS = 4;
   const TWITCH_CLIENT_ID = 'kp59hwgkiqrl7zntjotsnfovrmauoz';
   const STORAGE_PREFIX = 'extralife_tracker_';
+  const THEMES_STORAGE_KEY = `${STORAGE_PREFIX}custom_theme_profiles`;
 
   const isGitHubPagesHost = typeof window !== 'undefined' && (
       window.location.hostname.endsWith('github.io') || 
       window.location.protocol === 'file:'
   );
+
+  const loadStoredThemes = (): SavedThemeProfile[] => {
+      try {
+          const item = localStorage.getItem(THEMES_STORAGE_KEY);
+          if (item) return JSON.parse(item);
+      } catch (e) {}
+      return [];
+  };
+
+  const saveStoredThemes = (themes: SavedThemeProfile[]) => {
+      try {
+          localStorage.setItem(THEMES_STORAGE_KEY, JSON.stringify(themes));
+      } catch (e) {}
+  };
 
   const loadStoredConfig = (profileId: string) => {
       try {
@@ -645,7 +1332,11 @@ const App = () => {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [totalRaised, setTotalRaised] = useState<number>(0);
   const [teamTotalRaised, setTeamTotalRaised] = useState<number>(0);
+  const [teamGoal, setTeamGoal] = useState<number>(0);
   const [teamName, setTeamName] = useState<string>('');
+  const [teamDonations, setTeamDonations] = useState<any[]>([]);
+  const [teamParticipants, setTeamParticipants] = useState<any[]>([]);
+  const [participantName, setParticipantName] = useState<string>('');
   
   // Notification Queue System
   const [activeToasts, setActiveToasts] = useState<Donation[]>([]);
@@ -656,7 +1347,9 @@ const App = () => {
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
   // UI/Config State
-  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'celebration' | 'schedule' | 'sponsors' | 'text'>('none');
+  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text'>('none');
+  const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
   const [formError, setFormError] = useState('');
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
@@ -702,6 +1395,25 @@ const App = () => {
     successColor: '#00ff00',
     errorColor: '#ff3333',
     buttonTextColor: '#0d0d0d',
+
+    // Expanded & split color controls:
+    headerColor: '',
+    secondaryTextColor: '',
+    primaryButtonBgColor: '',
+    secondaryButtonBgColor: '',
+    dividerColor: '',
+    highlightColor: '',
+    donorNameColor: '',
+    progressBarColor: '',
+    progressBarBgColor: '',
+    progressBarTextColor: '',
+    toastBgColor: '',
+    toastBorderColor: '',
+    toastNameColor: '',
+    toastAmountColor: '',
+    inputBgColor: '',
+    inputBorderColor: '',
+
     fontFamily: "'Press Start 2P', cursive",
     themingMode: 'simple',
     notificationAnimation: 'slide',
@@ -727,6 +1439,12 @@ const App = () => {
   const [commandTrigger, setCommandTrigger] = useState('');
   const [commandResponse, setCommandResponse] = useState('');
   const [websiteTotalInput, setWebsiteTotalInput] = useState('');
+
+  // Theme Profile state
+  const [savedThemes, setSavedThemes] = useState<SavedThemeProfile[]>(loadStoredThemes);
+  const [newThemeNameInput, setNewThemeNameInput] = useState<string>('');
+  const [themeActionFeedback, setThemeActionFeedback] = useState<string | null>(null);
+  const [showAdvancedColors, setShowAdvancedColors] = useState<boolean>(false);
 
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   
@@ -1101,8 +1819,12 @@ const App = () => {
               setMilestones(payload.milestones || []);
               setTotalRaised(payload.totalRaised || 0);
               setGoal(payload.goal || 0);
+              if (payload.participantName) setParticipantName(payload.participantName);
               setTeamTotalRaised(payload.teamTotalRaised || 0);
+              setTeamGoal(payload.teamGoal || 0);
               setTeamName(payload.teamName || '');
+              setTeamDonations(payload.teamDonations || []);
+              setTeamParticipants(payload.teamParticipants || []);
               if (payload.conversionRate) setConversionRate(payload.conversionRate);
               if (payload.lastFetchedAt) {
                   setLastFetchedAt(new Date(payload.lastFetchedAt));
@@ -1170,14 +1892,30 @@ const App = () => {
 
           // 4. Team Details (optional)
           let tRaised = 0;
+          let tGoal = 0;
           let tName = '';
+          let tDonations: any[] = [];
+          let tParticipants: any[] = [];
           if (newTeamId) {
               try {
-                  const teamRes = await fetch(`https://dd.extra-life.org/api/teams/${newTeamId}`);
-                  if (teamRes.ok) {
+                  const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
+                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}`).catch(() => null),
+                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(() => null),
+                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}/participants`).catch(() => null)
+                  ]);
+                  if (teamRes && teamRes.ok) {
                       const tData = await teamRes.json();
                       tRaised = tData.sumDonations || 0;
+                      tGoal = tData.fundraisingGoal || 0;
                       tName = tData.name || '';
+                  }
+                  if (teamDonRes && teamDonRes.ok) {
+                      const tDon = await teamDonRes.json();
+                      tDonations = Array.isArray(tDon) ? tDon : [];
+                  }
+                  if (teamPartRes && teamPartRes.ok) {
+                      const tPart = await teamPartRes.json();
+                      tParticipants = Array.isArray(tPart) ? tPart : [];
                   }
               } catch (e) {}
           }
@@ -1202,14 +1940,19 @@ const App = () => {
 
           const newRaised = partData.sumDonations || 0;
           const newGoal = partData.fundraisingGoal || 0;
+          const pName = partData.displayName || '';
           const previousTotal = totalRaisedRef.current;
 
+          setParticipantName(pName);
           setTotalRaised(newRaised);
           setGoal(newGoal);
           setDonations(donData);
           setMilestones(mileData);
           setTeamTotalRaised(tRaised);
+          setTeamGoal(tGoal);
           setTeamName(tName);
+          setTeamDonations(tDonations);
+          setTeamParticipants(tParticipants);
           setConversionRate(cRate);
 
           const updatedPayload = {
@@ -1217,8 +1960,12 @@ const App = () => {
               milestones: mileData,
               totalRaised: newRaised,
               goal: newGoal,
+              participantName: pName,
               teamTotalRaised: tRaised,
+              teamGoal: tGoal,
               teamName: tName,
+              teamDonations: tDonations,
+              teamParticipants: tParticipants,
               conversionRate: cRate
           };
           saveStoredData(currentProfileRef.current, updatedPayload);
@@ -1419,8 +2166,12 @@ const App = () => {
           setMilestones(storedData.milestones || []);
           setTotalRaised(storedData.totalRaised || 0);
           setGoal(storedData.goal || 0);
+          if (storedData.participantName) setParticipantName(storedData.participantName);
           setTeamTotalRaised(storedData.teamTotalRaised || 0);
+          setTeamGoal(storedData.teamGoal || 0);
           setTeamName(storedData.teamName || '');
+          setTeamDonations(storedData.teamDonations || []);
+          setTeamParticipants(storedData.teamParticipants || []);
           if (storedData.conversionRate) setConversionRate(storedData.conversionRate);
           if (storedData.lastFetchedAt) setLastFetchedAt(new Date(storedData.lastFetchedAt));
       }
@@ -1471,8 +2222,12 @@ const App = () => {
               setMilestones(state.data.milestones || []);
               setTotalRaised(state.data.totalRaised || 0);
               setGoal(state.data.goal || 0);
+              if (state.data.participantName) setParticipantName(state.data.participantName);
               setTeamTotalRaised(state.data.teamTotalRaised || 0);
+              setTeamGoal(state.data.teamGoal || 0);
               setTeamName(state.data.teamName || '');
+              setTeamDonations(state.data.teamDonations || []);
+              setTeamParticipants(state.data.teamParticipants || []);
               setConversionRate(state.data.conversionRate || 1);
               if (state.data.lastFetchedAt) {
                   setLastFetchedAt(new Date(state.data.lastFetchedAt));
@@ -1498,8 +2253,12 @@ const App = () => {
               setMilestones(data.milestones || []);
               setTotalRaised(data.totalRaised || 0);
               setGoal(data.goal || 0);
+              if (data.participantName) setParticipantName(data.participantName);
               setTeamTotalRaised(data.teamTotalRaised || 0);
+              setTeamGoal(data.teamGoal || 0);
               setTeamName(data.teamName || '');
+              setTeamDonations(data.teamDonations || []);
+              setTeamParticipants(data.teamParticipants || []);
               if (data.conversionRate) setConversionRate(data.conversionRate);
               const fetchTime = data.lastFetchedAt ? new Date(data.lastFetchedAt) : new Date();
               setLastFetchedAt(fetchTime);
@@ -1554,7 +2313,7 @@ const App = () => {
     const overlayParam = params.get('overlay');
     const rootEl = document.getElementById('root');
     
-    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'celebration', 'schedule', 'sponsors', 'text'].includes(overlayParam)) {
+    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text'].includes(overlayParam)) {
         setOverlayType(overlayParam as any);
         if (rootEl) rootEl.classList.remove('config-mode');
     } else {
@@ -1611,8 +2370,21 @@ const App = () => {
         buttonTextColor: config.buttonTextColor 
     };
     const matchingPresetKey = findMatchingPreset(currentColors);
-    setSelectedPreset(matchingPresetKey || 'custom');
-  }, [config]);
+    if (matchingPresetKey) {
+        setSelectedPreset(matchingPresetKey);
+    } else {
+        const matchingSaved = savedThemes.find(th => {
+            return Object.keys(currentColors).every(ck => 
+                (th.colors as any)[ck] === (currentColors as any)[ck]
+            );
+        });
+        if (matchingSaved) {
+            setSelectedPreset(`profile:${matchingSaved.id}`);
+        } else {
+            setSelectedPreset('custom');
+        }
+    }
+  }, [config.backgroundColor, config.textColor, config.panelColor, config.panelBorderColor, config.accentColor1, config.accentColor2, config.successColor, config.errorColor, config.buttonTextColor, savedThemes]);
 
 
   // === HANDLERS ===
@@ -1641,12 +2413,169 @@ const App = () => {
   const handlePresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const presetKey = e.target.value;
     setSelectedPreset(presetKey);
-    if (presetKey !== 'custom') {
+    if (presetKey.startsWith('profile:')) {
+        const profileId = presetKey.replace('profile:', '');
+        const found = savedThemes.find(t => t.id === profileId);
+        if (found) {
+            updateConfig({
+                ...found.colors,
+                ...(found.fontFamily ? { fontFamily: found.fontFamily } : {}),
+                ...(found.notificationAnimation ? { notificationAnimation: found.notificationAnimation } : {})
+            });
+        }
+    } else if (presetKey !== 'custom') {
         const preset = COLOR_PRESETS[presetKey as keyof typeof COLOR_PRESETS];
         if (preset) {
-            updateConfig(preset.colors);
+            updateConfig({
+                ...preset.colors,
+                headerColor: '',
+                secondaryTextColor: '',
+                primaryButtonBgColor: '',
+                secondaryButtonBgColor: '',
+                dividerColor: '',
+                highlightColor: '',
+                donorNameColor: '',
+                progressBarColor: '',
+                progressBarBgColor: '',
+                progressBarTextColor: '',
+                toastBgColor: '',
+                toastBorderColor: '',
+                toastNameColor: '',
+                toastAmountColor: '',
+                inputBgColor: '',
+                inputBorderColor: '',
+            });
         }
     }
+  };
+
+  const handleSaveThemeProfile = () => {
+    const trimmed = newThemeNameInput.trim();
+    if (!trimmed) {
+      setFormError(t('enterThemeName'));
+      return;
+    }
+    setFormError('');
+    const newProfile: SavedThemeProfile = {
+      id: `theme-${Date.now()}`,
+      name: trimmed,
+      colors: {
+        backgroundColor: config.backgroundColor,
+        textColor: config.textColor,
+        panelColor: config.panelColor,
+        panelBorderColor: config.panelBorderColor,
+        accentColor1: config.accentColor1,
+        accentColor2: config.accentColor2,
+        successColor: config.successColor,
+        errorColor: config.errorColor,
+        buttonTextColor: config.buttonTextColor,
+        headerColor: config.headerColor,
+        secondaryTextColor: config.secondaryTextColor,
+        primaryButtonBgColor: config.primaryButtonBgColor,
+        secondaryButtonBgColor: config.secondaryButtonBgColor,
+        dividerColor: config.dividerColor,
+        highlightColor: config.highlightColor,
+        donorNameColor: config.donorNameColor,
+        progressBarColor: config.progressBarColor,
+        progressBarBgColor: config.progressBarBgColor,
+        progressBarTextColor: config.progressBarTextColor,
+        toastBgColor: config.toastBgColor,
+        toastBorderColor: config.toastBorderColor,
+        toastNameColor: config.toastNameColor,
+        toastAmountColor: config.toastAmountColor,
+        inputBgColor: config.inputBgColor,
+        inputBorderColor: config.inputBorderColor,
+      },
+      fontFamily: config.fontFamily,
+      notificationAnimation: config.notificationAnimation
+    };
+    const updatedThemes = [...savedThemes, newProfile];
+    setSavedThemes(updatedThemes);
+    saveStoredThemes(updatedThemes);
+    setSelectedPreset(`profile:${newProfile.id}`);
+    setNewThemeNameInput('');
+    setThemeActionFeedback(t('themeSavedSuccess'));
+    setTimeout(() => setThemeActionFeedback(null), 3000);
+  };
+
+  const handleUpdateThemeProfile = () => {
+    if (!selectedPreset.startsWith('profile:')) return;
+    const profileId = selectedPreset.replace('profile:', '');
+    const updatedThemes = savedThemes.map(th => {
+      if (th.id === profileId) {
+        return {
+          ...th,
+          colors: {
+            backgroundColor: config.backgroundColor,
+            textColor: config.textColor,
+            panelColor: config.panelColor,
+            panelBorderColor: config.panelBorderColor,
+            accentColor1: config.accentColor1,
+            accentColor2: config.accentColor2,
+            successColor: config.successColor,
+            errorColor: config.errorColor,
+            buttonTextColor: config.buttonTextColor,
+            headerColor: config.headerColor,
+            secondaryTextColor: config.secondaryTextColor,
+            primaryButtonBgColor: config.primaryButtonBgColor,
+            secondaryButtonBgColor: config.secondaryButtonBgColor,
+            dividerColor: config.dividerColor,
+            highlightColor: config.highlightColor,
+            donorNameColor: config.donorNameColor,
+            progressBarColor: config.progressBarColor,
+            progressBarBgColor: config.progressBarBgColor,
+            progressBarTextColor: config.progressBarTextColor,
+            toastBgColor: config.toastBgColor,
+            toastBorderColor: config.toastBorderColor,
+            toastNameColor: config.toastNameColor,
+            toastAmountColor: config.toastAmountColor,
+            inputBgColor: config.inputBgColor,
+            inputBorderColor: config.inputBorderColor,
+          },
+          fontFamily: config.fontFamily,
+          notificationAnimation: config.notificationAnimation
+        };
+      }
+      return th;
+    });
+    setSavedThemes(updatedThemes);
+    saveStoredThemes(updatedThemes);
+    setThemeActionFeedback(t('themeUpdatedSuccess'));
+    setTimeout(() => setThemeActionFeedback(null), 3000);
+  };
+
+  const handleDeleteThemeProfile = (profileIdToDelete?: string) => {
+    const targetId = profileIdToDelete || (selectedPreset.startsWith('profile:') ? selectedPreset.replace('profile:', '') : null);
+    if (!targetId) return;
+    const updatedThemes = savedThemes.filter(th => th.id !== targetId);
+    setSavedThemes(updatedThemes);
+    saveStoredThemes(updatedThemes);
+    if (selectedPreset === `profile:${targetId}`) {
+      setSelectedPreset('custom');
+    }
+    setThemeActionFeedback(t('themeDeletedSuccess'));
+    setTimeout(() => setThemeActionFeedback(null), 3000);
+  };
+
+  const handleResetAdvancedColors = () => {
+    updateConfig({
+      headerColor: '',
+      secondaryTextColor: '',
+      primaryButtonBgColor: '',
+      secondaryButtonBgColor: '',
+      dividerColor: '',
+      highlightColor: '',
+      donorNameColor: '',
+      progressBarColor: '',
+      progressBarBgColor: '',
+      progressBarTextColor: '',
+      toastBgColor: '',
+      toastBorderColor: '',
+      toastNameColor: '',
+      toastAmountColor: '',
+      inputBgColor: '',
+      inputBorderColor: '',
+    });
   };
   
   const handleGetTwitchToken = () => {
@@ -1752,7 +2681,11 @@ const App = () => {
   };
 
   const handleExportConfig = () => {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+      const exportData = {
+          ...config,
+          savedThemeProfiles: savedThemes
+      };
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
       downloadAnchor.setAttribute("download", `extralife-config-${currentProfile}.json`);
@@ -1769,6 +2702,18 @@ const App = () => {
           try {
               const imported = JSON.parse(event.target?.result as string);
               if (typeof imported === 'object' && imported !== null) {
+                  if (Array.isArray(imported.savedThemeProfiles)) {
+                      const existingIds = new Set(savedThemes.map(s => s.id));
+                      const merged = [...savedThemes];
+                      imported.savedThemeProfiles.forEach((p: SavedThemeProfile) => {
+                          if (p && p.id && !existingIds.has(p.id)) {
+                              merged.push(p);
+                              existingIds.add(p.id);
+                          }
+                      });
+                      setSavedThemes(merged);
+                      saveStoredThemes(merged);
+                  }
                   updateConfig(imported);
                   setImportSuccessMsg(t('importSuccess'));
                   setTimeout(() => setImportSuccessMsg(null), 3500);
@@ -1955,41 +2900,60 @@ const App = () => {
   };
   const currentToastAnimation = toastAnimations[config.notificationAnimation] || toastAnimations.slide;
 
+  // === EFFECTIVE COLORS FOR GRANULAR THEMING & SPLIT ACCENTS ===
+  const effHeaderColor = config.headerColor || config.accentColor1;
+  const effSecondaryTextColor = config.secondaryTextColor || config.accentColor2;
+  const effPrimaryButtonBgColor = config.primaryButtonBgColor || config.accentColor1;
+  const effSecondaryButtonBgColor = config.secondaryButtonBgColor || config.accentColor2;
+  const effDividerColor = config.dividerColor || config.accentColor2;
+  const effHighlightColor = config.highlightColor || config.accentColor1;
+  const effDonorNameColor = config.donorNameColor || config.highlightColor || config.accentColor1;
+
+  const effProgressBarColor = config.progressBarColor || config.accentColor1;
+  const effProgressBarBgColor = config.progressBarBgColor || config.panelColor;
+  const effProgressBarTextColor = config.progressBarTextColor || config.buttonTextColor;
+  const effToastBgColor = config.toastBgColor || config.panelColor;
+  const effToastBorderColor = config.toastBorderColor || config.accentColor1;
+  const effToastNameColor = config.toastNameColor || config.accentColor1;
+  const effToastAmountColor = config.toastAmountColor || config.accentColor2;
+  const effInputBgColor = config.inputBgColor || config.panelColor;
+  const effInputBorderColor = config.inputBorderColor || config.accentColor2;
+
   const styles = {
     container: { width: '100%', maxWidth: '1200px', margin: '0 auto', textAlign: 'center' as const },
-    header: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: config.accentColor1, textShadow: `3px 3px ${config.backgroundColor}`, marginBottom: '1rem', fontFamily: config.fontFamily, flexDirection: 'column' as const },
-    form: { display: 'flex', flexDirection: 'column' as const, gap: '1rem', backgroundColor: config.panelColor, border: `4px solid ${config.accentColor1}`, padding: '20px', marginBottom: '2rem' },
-    input: { backgroundColor: config.panelColor, border: `2px solid ${config.accentColor2}`, color: config.textColor, padding: '10px', fontFamily: config.fontFamily, fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' as const },
-    button: { border: 'none', padding: '15px', fontFamily: config.fontFamily, fontSize: '1.2rem', cursor: 'pointer', textTransform: 'uppercase' as const, marginTop: '1rem' },
+    header: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: effHeaderColor, textShadow: `3px 3px ${config.backgroundColor}`, marginBottom: '1rem', fontFamily: config.fontFamily, flexDirection: 'column' as const },
+    form: { display: 'flex', flexDirection: 'column' as const, gap: '1rem', backgroundColor: config.panelColor, border: `4px solid ${effHeaderColor}`, padding: '20px', marginBottom: '2rem' },
+    input: { backgroundColor: effInputBgColor, border: `2px solid ${effInputBorderColor}`, color: config.textColor, padding: '10px', fontFamily: config.fontFamily, fontSize: '1rem', outline: 'none', width: '100%', boxSizing: 'border-box' as const },
+    button: { border: 'none', padding: '15px', fontFamily: config.fontFamily, fontSize: '1.2rem', cursor: 'pointer', textTransform: 'uppercase' as const, marginTop: '1rem', backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor },
     error: { color: config.errorColor, marginTop: '10px', fontSize: '0.9rem', backgroundColor: config.panelColor, padding: '15px', border: `2px solid ${config.errorColor}`, whiteSpace: 'pre-wrap' as const, fontFamily: config.fontFamily },
-    loading: { fontSize: '1.2rem', color: config.accentColor2, margin: '2rem 0', fontFamily: config.fontFamily },
+    loading: { fontSize: '1.2rem', color: effSecondaryTextColor, margin: '2rem 0', fontFamily: config.fontFamily },
     listContainer: { display: 'flex', flexDirection: 'column' as const, gap: '1rem' },
     donationItem: { backgroundColor: config.panelColor, border: `2px solid ${config.panelBorderColor}`, padding: '15px', textAlign: 'left' as const, animation: 'fadeIn 0.5s ease-in-out' },
     donationHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
-    donationName: { fontSize: '1.2rem', color: config.accentColor1, fontFamily: config.fontFamily },
+    donationName: { fontSize: '1.2rem', color: effDonorNameColor, fontFamily: config.fontFamily },
     donationAmount: { fontSize: '1.2rem', color: config.successColor, fontFamily: config.fontFamily },
     donationMessage: { marginTop: '10px', color: config.textColor, fontSize: '0.9rem', fontStyle: 'italic' as const, opacity: 0.8, fontFamily: config.fontFamily },
     label: { fontSize: '1rem', color: config.textColor, textAlign: 'left' as const, opacity: 0.7, fontFamily: config.fontFamily },
     colorPickerContainer: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '5px' },
-    colorInput: { WebkitAppearance: 'none' as const, MozAppearance: 'none' as const, appearance: 'none' as const, width: '50px', height: '50px', backgroundColor: 'transparent', border: `2px solid ${config.accentColor2}`, cursor: 'pointer' },
+    colorInput: { WebkitAppearance: 'none' as const, MozAppearance: 'none' as const, appearance: 'none' as const, width: '50px', height: '50px', backgroundColor: 'transparent', border: `2px solid ${effInputBorderColor}`, cursor: 'pointer' },
     // Overlay styles
-    progressBarContainer: { width: '100%', backgroundColor: config.panelColor, border: `4px solid ${config.panelBorderColor}`, padding: '10px', boxSizing: 'border-box' as const },
-    progressBar: { height: '40px', backgroundColor: config.accentColor1, width: `0%`, transition: 'width 0.5s ease-in-out', display: 'flex', alignItems: 'center', justifyContent: 'center' as const, overflow: 'hidden' },
-    progressText: { color: config.buttonTextColor, textShadow: `1px 1px ${hexToRgba(config.textColor, 0.5)}`, fontSize: '1.2rem', fontFamily: config.fontFamily },
-    goalText: { color: config.accentColor2, marginTop: '10px', fontFamily: config.fontFamily },
-    timerText: { color: config.accentColor2, marginBottom: '10px', fontSize: '1.2rem', textShadow: `2px 2px ${config.backgroundColor}`, fontFamily: config.fontFamily },
+    progressBarContainer: { width: '100%', backgroundColor: effProgressBarBgColor, border: `4px solid ${config.panelBorderColor}`, padding: '10px', boxSizing: 'border-box' as const },
+    progressBar: { height: '40px', backgroundColor: effProgressBarColor, width: `0%`, transition: 'width 0.5s ease-in-out', display: 'flex', alignItems: 'center', justifyContent: 'center' as const, overflow: 'hidden' },
+    progressText: { color: effProgressBarTextColor, textShadow: `1px 1px ${hexToRgba(config.textColor, 0.5)}`, fontSize: '1.2rem', fontFamily: config.fontFamily },
+    goalText: { color: effSecondaryTextColor, marginTop: '10px', fontFamily: config.fontFamily },
+    timerText: { color: effSecondaryTextColor, marginBottom: '10px', fontSize: '1.2rem', textShadow: `2px 2px ${config.backgroundColor}`, fontFamily: config.fontFamily },
     toastContainer: { position: 'fixed' as const, top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, display: 'flex', flexDirection: 'column' as const, gap: '10px', alignItems: 'center', width: '90%', maxWidth: '600px' },
-    toast: { backgroundColor: hexToRgba(config.panelColor, 0.95), border: `3px solid ${config.accentColor1}`, color: config.textColor, padding: '20px', animation: currentToastAnimation, textAlign: 'center' as const, minWidth: '300px' },
-    toastName: { fontSize: '1.2rem', color: config.accentColor1, fontWeight: 'bold' as const, fontFamily: config.fontFamily },
-    toastAmount: { fontSize: '1.5rem', color: config.accentColor2, margin: '10px 0', fontFamily: config.fontFamily },
+    toast: { backgroundColor: hexToRgba(effToastBgColor, 0.95), border: `3px solid ${effToastBorderColor}`, color: config.textColor, padding: '20px', animation: currentToastAnimation, textAlign: 'center' as const, minWidth: '300px' },
+    toastName: { fontSize: '1.2rem', color: effToastNameColor, fontWeight: 'bold' as const, fontFamily: config.fontFamily },
+    toastAmount: { fontSize: '1.5rem', color: effToastAmountColor, margin: '10px 0', fontFamily: config.fontFamily },
     toastMessage: { fontSize: '0.9rem', color: config.textColor, fontStyle: 'italic' as const, opacity: 0.8, fontFamily: config.fontFamily },
     milestoneDescription: { fontSize: '1.2rem', color: config.textColor, margin: '0 0 10px 0', textShadow: `2px 2px ${config.backgroundColor}`, fontFamily: config.fontFamily },
     soundItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', border: `2px solid ${config.panelBorderColor}`, marginBottom: '10px', color: config.textColor, fontFamily: config.fontFamily },
-    soundButton: { backgroundColor: config.accentColor2, border: 'none', color: config.buttonTextColor, padding: '5px 10px', fontFamily: config.fontFamily, fontSize: '0.8rem', cursor: 'pointer', marginLeft: '10px' },
-    previewButton: { backgroundColor: config.accentColor2, border: 'none', color: config.buttonTextColor, padding: '12px 15px', fontFamily: config.fontFamily, fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0 },
+    soundButton: { backgroundColor: effSecondaryButtonBgColor, border: 'none', color: config.buttonTextColor, padding: '5px 10px', fontFamily: config.fontFamily, fontSize: '0.8rem', cursor: 'pointer', marginLeft: '10px' },
+    previewButton: { backgroundColor: effSecondaryButtonBgColor, border: 'none', color: config.buttonTextColor, padding: '12px 15px', fontFamily: config.fontFamily, fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0 },
     // Collapsible Section Styles
-    collapsibleContainer: { borderTop: `2px dashed ${config.accentColor2}`, margin: '0', paddingTop: '20px' },
-    collapsibleHeader: { backgroundColor: 'transparent', border: 'none', color: config.accentColor1, cursor: 'pointer', fontFamily: config.fontFamily, fontSize: '1.2rem', padding: '0', margin: 0, textAlign: 'left' as const, width: '100%', display: 'flex', alignItems: 'center' },
+    collapsibleContainer: { borderTop: `2px dashed ${effDividerColor}`, margin: '0', paddingTop: '20px' },
+    collapsibleHeader: { backgroundColor: 'transparent', border: 'none', color: effHeaderColor, cursor: 'pointer', fontFamily: config.fontFamily, fontSize: '1.2rem', padding: '0', margin: 0, textAlign: 'left' as const, width: '100%', display: 'flex', alignItems: 'center' },
     collapsibleChevron: { display: 'inline-block', marginRight: '15px', transition: 'transform 0.2s ease-in-out', fontSize: '1.2rem' },
     collapsibleContent: { overflow: 'hidden', transition: 'max-height 0.3s ease-out' },
     // New Card Styles
@@ -1998,7 +2962,7 @@ const App = () => {
     dashboardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem', width: '100%', textAlign: 'left' as const, alignItems: 'start' },
     statHero: { backgroundColor: config.panelColor, border: `4px solid ${config.successColor}`, padding: '20px', textAlign: 'center' as const, marginBottom: '2rem', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '10px' },
     bigStat: { fontSize: '3rem', color: config.successColor, textShadow: `3px 3px ${config.backgroundColor}`, margin: 0 },
-    secondaryStat: { fontSize: '1rem', color: config.accentColor2, margin: 0 },
+    secondaryStat: { fontSize: '1rem', color: effSecondaryTextColor, margin: 0 },
     feedContainer: { maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' as const, paddingRight: '10px' }
   };
 
@@ -2019,8 +2983,8 @@ const App = () => {
     input[type="color"]::-moz-color-swatch { border-radius: 5px; border: none; }
     input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
     input[type="checkbox"] {
-      appearance: none; background-color: transparent; margin: 0; font: inherit; color: ${config.accentColor2};
-      width: 1.5em; height: 1.5em; border: 0.15em solid ${config.accentColor2}; border-radius: 0.15em;
+      appearance: none; background-color: transparent; margin: 0; font: inherit; color: ${effInputBorderColor};
+      width: 1.5em; height: 1.5em; border: 0.15em solid ${effInputBorderColor}; border-radius: 0.15em;
       transform: translateY(-0.075em); display: grid; place-content: center; cursor: pointer;
     }
     input[type="checkbox"]::before {
@@ -2030,22 +2994,24 @@ const App = () => {
     }
     input[type="checkbox"]:checked::before { transform: scale(1); }
     select {
-      background-image: linear-gradient(45deg, transparent 50%, ${config.accentColor2} 50%), linear-gradient(135deg, ${config.accentColor2} 50%, transparent 50%);
+      background-color: ${effInputBgColor};
+      color: ${config.textColor};
+      background-image: linear-gradient(45deg, transparent 50%, ${effInputBorderColor} 50%), linear-gradient(135deg, ${effInputBorderColor} 50%, transparent 50%);
       background-position: calc(100% - 20px) calc(1em + 2px), calc(100% - 15px) calc(1em + 2px);
       background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
       -webkit-appearance: none; -moz-appearance: none; appearance: none;
     }
     input[type="radio"] { display: none; }
     input[type="radio"] + label {
-      cursor: pointer; padding: 10px 15px; border: 2px solid ${config.accentColor2}; color: ${config.accentColor2};
+      cursor: pointer; padding: 10px 15px; border: 2px solid ${effSecondaryButtonBgColor}; color: ${effSecondaryButtonBgColor};
     }
     input[type="radio"]:checked + label {
-      background-color: ${config.accentColor2}; color: ${config.buttonTextColor};
+      background-color: ${effSecondaryButtonBgColor}; color: ${config.buttonTextColor};
     }
     /* Custom Scrollbar for Dash */
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: ${config.panelColor}; }
-    ::-webkit-scrollbar-thumb { background: ${config.accentColor1}; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: ${effPrimaryButtonBgColor}; border-radius: 4px; }
   `;
 
   // === RENDER ===
@@ -2133,7 +3099,7 @@ const App = () => {
             
             {/* CURRENT PROFILE DISPLAY & CHANGE BUTTON */}
             <div style={{...styles.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem'}}>
-                <span style={{color: config.accentColor2}}>{t('profile')}: <strong>{currentProfile}</strong></span>
+                <span style={{color: effSecondaryTextColor}}>{t('profile')}: <strong>{currentProfile}</strong></span>
                 <button 
                     type="button" 
                     onClick={handleChangeId} 
@@ -2143,6 +3109,109 @@ const App = () => {
                 </button>
             </div>
 
+            {/* VIEW MODE TOGGLE (PARTICIPANT vs TEAM DASHBOARD) */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', width: '100%' }}>
+                <button
+                    type="button"
+                    id="tab-participant-dashboard"
+                    onClick={() => setDashboardView('participant')}
+                    style={{
+                        ...styles.button,
+                        flex: 1,
+                        margin: 0,
+                        padding: '12px 15px',
+                        fontSize: '0.95rem',
+                        fontWeight: 'bold',
+                        backgroundColor: dashboardView === 'participant' ? effPrimaryButtonBgColor : config.panelColor,
+                        color: dashboardView === 'participant' ? config.buttonTextColor : config.textColor,
+                        border: `2px solid ${dashboardView === 'participant' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.4)}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                    }}
+                >
+                    👤 {t('participantDashboard')}
+                </button>
+                <button
+                    type="button"
+                    id="tab-team-dashboard"
+                    onClick={() => setDashboardView('team')}
+                    style={{
+                        ...styles.button,
+                        flex: 1,
+                        margin: 0,
+                        padding: '12px 15px',
+                        fontSize: '0.95rem',
+                        fontWeight: 'bold',
+                        backgroundColor: dashboardView === 'team' ? effPrimaryButtonBgColor : config.panelColor,
+                        color: dashboardView === 'team' ? config.buttonTextColor : config.textColor,
+                        border: `2px solid ${dashboardView === 'team' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.4)}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                    }}
+                >
+                    👥 {t('teamDashboard')}
+                </button>
+            </div>
+
+            {dashboardView === 'team' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+                <TeamDashboardView
+                  styles={styles}
+                  config={config}
+                  currencyPrefix={currencyPrefix}
+                  convertAmount={convertAmount}
+                  teamTotalRaised={teamTotalRaised}
+                  teamGoal={teamGoal}
+                  teamName={teamName}
+                  teamDonations={teamDonations}
+                  teamParticipants={teamParticipants}
+                  participantId={config.participantId}
+                  participantName={participantName}
+                  participantDonations={donations}
+                  participantTotalRaised={totalRaised}
+                  participantGoal={goal}
+                  selectedAccountId={selectedAccountId}
+                  setSelectedAccountId={setSelectedAccountId}
+                  t={t}
+                  isOverlay={false}
+                  effHeaderColor={effHeaderColor}
+                  effSecondaryTextColor={effSecondaryTextColor}
+                  effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                  effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                  effDividerColor={effDividerColor}
+                  effHighlightColor={effHighlightColor}
+                  effDonorNameColor={effDonorNameColor}
+                  effProgressBarColor={effProgressBarColor}
+                  hexToRgba={hexToRgba}
+                  lastFetchedAt={lastFetchedAt}
+                  onManualSync={handleManualSync}
+                />
+
+                {/* Team Dashboard Quick Actions & Overlays */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', textAlign: 'left' as const }}>
+                    <div style={styles.card}>
+                        <h4 style={{ margin: '0 0 10px 0', color: effHighlightColor, fontSize: '0.95rem' }}>{t('buttonsSection')}</h4>
+                        <div style={{ display: 'flex', gap: '0.8rem', width: '100%', flexWrap: 'wrap' }}>
+                            <button type="button" onClick={handleTestDonation} style={{...styles.button, backgroundColor: effSecondaryButtonBgColor, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>{t('testDonation')}</button>
+                            <button type="button" onClick={handleManualSync} style={{...styles.button, backgroundColor: config.successColor, color: config.buttonTextColor, flex: 1, margin: 0, fontSize: '0.85rem', padding: '10px' }}>{t('resyncData')}</button>
+                            <button type="button" onClick={handleClearOverlays} style={{...styles.button, backgroundColor: config.errorColor, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>{t('clearStop')}</button>
+                        </div>
+                    </div>
+                    <div style={styles.card}>
+                        <h4 style={{ margin: '0 0 10px 0', color: effHighlightColor, fontSize: '0.95rem' }}>{t('overlayLinks')}</h4>
+                        <div style={{ display: 'flex', gap: '0.8rem', width: '100%' }}>
+                            <button type="button" onClick={() => openOverlay('team-dashboard', 'width=1280,height=850')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>
+                                ↗ {t('openPopup')}
+                            </button>
+                            <button type="button" onClick={() => handleCopyUrl('team-dashboard')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>
+                                📋 {copyFeedback === 'team-dashboard' ? t('copied') : t('copyLink')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* HERO STATS SECTION */}
             <div style={styles.statHero}>
                 <h2 style={styles.bigStat}>{currencyPrefix}{convertAmount(totalRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h2>
@@ -2155,8 +3224,8 @@ const App = () => {
                 
                 {/* COLUMN 1: LIVE FEED */}
                 <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                    <div style={{...styles.card, border: `2px solid ${config.accentColor1}`}}>
-                         <h3 style={{margin: '0 0 10px 0', color: config.accentColor1, borderBottom: `1px dashed ${config.accentColor1}`, paddingBottom: '10px'}}>{t('recentDonations')}</h3>
+                    <div style={{...styles.card, border: `2px solid ${effHighlightColor}`}}>
+                         <h3 style={{margin: '0 0 10px 0', color: effHighlightColor, borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '10px'}}>{t('recentDonations')}</h3>
                          <div style={styles.feedContainer}>
                             {sortedDonations.length === 0 && <p style={{color: config.textColor, opacity: 0.7}}>{t('noDonations')}</p>}
                             {sortedDonations.map(d => (
@@ -2181,7 +3250,7 @@ const App = () => {
                      {/* Actions Panel */}
                      <div style={styles.card}>
                         <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
-                            <button type="button" onClick={handleTestDonation} style={{...styles.button, backgroundColor: config.accentColor2, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.9rem', padding: '10px' }}>{t('testDonation')}</button>
+                            <button type="button" onClick={handleTestDonation} style={{...styles.button, backgroundColor: effSecondaryButtonBgColor, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.9rem', padding: '10px' }}>{t('testDonation')}</button>
                             <button type="button" onClick={handleManualSync} style={{...styles.button, backgroundColor: config.successColor, color: config.buttonTextColor, flex: 1, margin: 0, fontSize: '0.9rem', padding: '10px' }}>{t('resyncData')}</button>
                         </div>
                         <button type="button" onClick={handleClearOverlays} style={{...styles.button, backgroundColor: config.errorColor, color: config.buttonTextColor, margin: 0, width: '100%', fontSize: '0.9rem', padding: '10px' }}>{t('clearStop')}</button>
@@ -2189,8 +3258,8 @@ const App = () => {
 
                      {/* Secondary Stats */}
                      <div style={styles.card}>
-                       <p style={{margin:0, color: config.accentColor2}}>{t('teamRaised')}: {currencyPrefix}{convertAmount(teamTotalRaised).toFixed(2)}</p>
-                       <p style={{margin:0, color: config.accentColor2, fontSize: '0.85rem', marginTop: '5px'}}>{t('lastDonator')}: {sortedDonations.length > 0 ? (sortedDonations[0].displayName === 'Anonymous' ? t('anonymous') : sortedDonations[0].displayName) : t('none')}</p>
+                       <p style={{margin:0, color: effSecondaryTextColor}}>{t('teamRaised')}: {currencyPrefix}{convertAmount(teamTotalRaised).toFixed(2)}</p>
+                       <p style={{margin:0, color: effSecondaryTextColor, fontSize: '0.85rem', marginTop: '5px'}}>{t('lastDonator')}: {sortedDonations.length > 0 ? (sortedDonations[0].displayName === 'Anonymous' ? t('anonymous') : sortedDonations[0].displayName) : t('none')}</p>
                     </div>
 
                     {/* Overlay Links (Collapsed) */}
@@ -2202,6 +3271,7 @@ const App = () => {
                                     { title: t('notifications'), fn: () => openOverlay('notifications', 'width=800,height=600'), type: 'notifications' },
                                     { title: t('nextMilestone'), fn: () => openOverlay('milestone', 'width=800,height=180'), type: 'milestone' },
                                     { title: t('teamTracker'), fn: () => openOverlay('team', 'width=400,height=100'), type: 'team' },
+                                    { title: t('teamDashboard'), fn: () => openOverlay('team-dashboard', 'width=1280,height=850'), type: 'team-dashboard' },
                                     { title: t('celebration'), fn: () => openOverlay('celebration', 'width=1920,height=1080'), type: 'celebration' },
                                     { title: t('schedule'), fn: () => openOverlay('schedule', 'width=600,height=400'), type: 'schedule' },
                                     { title: t('sponsorsOverlay'), fn: () => openOverlay('sponsors', 'width=300,height=150'), type: 'sponsors' },
@@ -2210,10 +3280,10 @@ const App = () => {
                                         <div key={overlay.title} style={{...styles.card, padding: '10px', gap: '5px', backgroundColor: hexToRgba(config.panelColor, 0.5)}}>
                                         <h4 style={{margin: '0', color: config.textColor, textAlign: 'left', fontSize: '0.8rem'}}>{overlay.title}</h4>
                                         <div style={{display: 'flex', gap: '5px'}}>
-                                            <button type="button" onClick={overlay.fn} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.textColor, marginTop: 0, flex: 1, fontSize: '0.7rem', padding: '5px'}}>
+                                            <button type="button" onClick={overlay.fn} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, marginTop: 0, flex: 1, fontSize: '0.7rem', padding: '5px'}}>
                                                 {t('openPopup')}
                                             </button>
-                                            <button type="button" onClick={() => handleCopyUrl(overlay.type)} style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, marginTop: 0, flex: 1, fontSize: '0.7rem', padding: '5px'}}>
+                                            <button type="button" onClick={() => handleCopyUrl(overlay.type)} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, marginTop: 0, flex: 1, fontSize: '0.7rem', padding: '5px'}}>
                                                 {copyFeedback === overlay.type ? t('copied') : t('copyLink')}
                                             </button>
                                         </div>
@@ -2228,7 +3298,7 @@ const App = () => {
                          <button
                             type="button"
                             onClick={() => setIsSettingsCollapsed(prev => !prev)}
-                            style={{...styles.button, backgroundColor: 'transparent', border: `1px solid ${config.accentColor1}`, color: config.accentColor1, width: '100%', margin: 0, padding: '10px', fontSize: '1rem' }}
+                            style={{...styles.button, backgroundColor: 'transparent', border: `1px solid ${effPrimaryButtonBgColor}`, color: effPrimaryButtonBgColor, width: '100%', margin: 0, padding: '10px', fontSize: '1rem' }}
                             >
                             {isSettingsCollapsed ? t('showSettings') : t('hideSettings')}
                         </button>
@@ -2304,7 +3374,7 @@ const App = () => {
                             {config.currency === 'CAD' && (
                                 <div style={{ marginTop: '8px', marginBottom: '14px', padding: '10px', backgroundColor: hexToRgba(config.panelBorderColor, 0.1), border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}` }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                                        <span style={{ fontSize: '0.85rem', color: config.accentColor2 }}>
+                                        <span style={{ fontSize: '0.85rem', color: effSecondaryTextColor }}>
                                             {t('exchangeRate')}: <strong>1 USD = {effectiveRate.toFixed(4)} CAD</strong>
                                             {config.customExchangeRate > 0 && (
                                                 <span style={{ marginLeft: '6px', fontSize: '0.72rem', opacity: 0.8, color: config.textColor }}>
@@ -2334,7 +3404,7 @@ const App = () => {
                                                     updateConfig({ customExchangeRate: 0 });
                                                     fetchConversionRate(true);
                                                 }}
-                                                style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${config.accentColor2}`, color: config.accentColor2 }}
+                                                style={{ ...styles.button, margin: 0, padding: '3px 8px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: effSecondaryButtonBgColor }}
                                                 title={t('refreshRateTitle')}
                                             >
                                                 ↻ {t('refreshRate')} ({t('live')})
@@ -2386,7 +3456,7 @@ const App = () => {
                                         />
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '4px' }}>
-                                        <div style={{ fontSize: '0.72rem', color: config.accentColor2, opacity: 0.85 }}>
+                                        <div style={{ fontSize: '0.72rem', color: effSecondaryTextColor, opacity: 0.85 }}>
                                             {totalRaised > 0 
                                                 ? `${t('calculatedRateNotice', { usd: totalRaised.toFixed(2) })}`
                                                 : (goal > 0 
@@ -2412,7 +3482,7 @@ const App = () => {
                             </CollapsibleSection>
                             
                             <CollapsibleSection title={t('twitchIntegration')} isInitiallyCollapsed={true} styles={styles}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: `1px dashed ${config.accentColor2}`, paddingBottom: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '10px' }}>
                                     <input 
                                         type="checkbox" 
                                         checked={config.twitchEnabled} 
@@ -2457,18 +3527,18 @@ const App = () => {
                                         <button 
                                             type="button" 
                                             onClick={handleGetTwitchToken} 
-                                            style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px', margin: 0, whiteSpace: 'nowrap'}}
+                                            style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px', margin: 0, whiteSpace: 'nowrap'}}
                                         >
                                             {t('getTwitchToken')}
                                         </button>
                                     </div>
 
-                                    <div style={{borderTop: `2px dashed ${config.accentColor2}`, margin: '20px 0'}}></div>
+                                    <div style={{borderTop: `2px dashed ${effDividerColor}`, margin: '20px 0'}}></div>
 
                                     <h4 style={{...styles.label, opacity: 1, fontSize: '1.1rem', marginBottom: '10px' }}>{t('chatCommands')}</h4>
                                     
                                     <div style={{ marginBottom: '15px' }}>
-                                        <h5 style={{ color: config.accentColor1, margin: '0 0 5px 0', fontSize: '0.9rem' }}>{t('builtinCommands')}</h5>
+                                        <h5 style={{ color: effHeaderColor, margin: '0 0 5px 0', fontSize: '0.9rem' }}>{t('builtinCommands')}</h5>
                                         <ul style={{ color: config.textColor, fontSize: '0.85rem', margin: 0, paddingLeft: '20px', opacity: 0.8, textAlign: 'left' }}>
                                             <li><strong>!total</strong> - {t('builtinTotalDesc')}</li>
                                             <li><strong>!goal</strong> - {t('builtinGoalDesc')}</li>
@@ -2477,20 +3547,20 @@ const App = () => {
                                     </div>
 
                                     <div>
-                                        <h5 style={{ color: config.accentColor1, margin: '0 0 10px 0', fontSize: '0.9rem' }}>{t('customCommands')}</h5>
+                                        <h5 style={{ color: effHeaderColor, margin: '0 0 10px 0', fontSize: '0.9rem' }}>{t('customCommands')}</h5>
                                         
                                         <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                                             <input type="text" value={commandTrigger} onChange={e => setCommandTrigger(e.target.value)} style={{...styles.input, padding: '8px', flex: 1}} placeholder={t('commandTrigger')} />
                                             <input type="text" value={commandResponse} onChange={e => setCommandResponse(e.target.value)} style={{...styles.input, padding: '8px', flex: 2}} placeholder={t('commandResponse')} />
                                         </div>
-                                        <button type="button" onClick={handleAddCommand} style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '0.9rem', padding: '8px', margin: '0 0 15px 0', width: '100%' }}>{t('addCommand')}</button>
+                                        <button type="button" onClick={handleAddCommand} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '8px', margin: '0 0 15px 0', width: '100%' }}>{t('addCommand')}</button>
                                         
                                         <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                             {config.customCommands.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.6 }}>{t('noCommands')}</p>}
                                             {config.customCommands.map(cmd => (
                                                 <div key={cmd.id} style={{...styles.soundItem, padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', overflow: 'hidden', marginRight: '10px' }}>
-                                                        <span style={{ color: config.accentColor1, fontWeight: 'bold' }}>{cmd.trigger}</span>
+                                                        <span style={{ color: effHighlightColor, fontWeight: 'bold' }}>{cmd.trigger}</span>
                                                         <span style={{ fontSize: '0.8rem', opacity: 0.8, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '100%' }}>{cmd.response}</span>
                                                     </div>
                                                     <button type="button" onClick={() => handleDeleteCommand(cmd.id)} style={{...styles.soundButton, backgroundColor: config.errorColor}}>{t('delete')}</button>
@@ -2526,7 +3596,7 @@ const App = () => {
                                     <input type="datetime-local" value={schedTime} onChange={e => setSchedTime(e.target.value)} style={{...styles.input, padding: '8px', flex: 1}} />
                                     <input type="text" value={schedDesc} onChange={e => setSchedDesc(e.target.value)} style={{...styles.input, padding: '8px', flex: 2}} placeholder={t('description')} />
                                 </div>
-                                <button type="button" onClick={handleAddScheduleItem} style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px', margin: '10px auto 0 auto', width: '50%' }}>{t('addItem')}</button>
+                                <button type="button" onClick={handleAddScheduleItem} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '1rem', padding: '10px', margin: '10px auto 0 auto', width: '50%' }}>{t('addItem')}</button>
                                 </div>
                                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                 {config.scheduleItems.map(item => {
@@ -2586,13 +3656,91 @@ const App = () => {
                             )}
 
                             <label style={styles.label}>{t('colorPreset')}</label>
-                            <select value={selectedPreset} onChange={handlePresetChange} style={styles.input}>
-                                <option value="custom">{t('custom')}</option>
-                                {Object.entries(COLOR_PRESETS).map(([key, { name }]) => (<option key={key} value={key}>{name}</option>))}
-                            </select>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <select value={selectedPreset} onChange={handlePresetChange} style={{ ...styles.input, flex: 1, minWidth: '220px' }}>
+                                    <option value="custom">{t('custom')}</option>
+                                    {savedThemes.length > 0 && (
+                                        <optgroup label={t('savedThemeProfiles')}>
+                                            {savedThemes.map(profile => (
+                                                <option key={`profile:${profile.id}`} value={`profile:${profile.id}`}>
+                                                    ★ {profile.name}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                    <optgroup label={t('builtInPresets')}>
+                                        {Object.entries(COLOR_PRESETS).map(([key, { name }]) => (
+                                            <option key={key} value={key}>{name}</option>
+                                        ))}
+                                    </optgroup>
+                                </select>
+
+                                {selectedPreset.startsWith('profile:') && (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={handleUpdateThemeProfile}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 12px', fontSize: '0.8rem', backgroundColor: effSecondaryButtonBgColor, color: config.buttonTextColor }}
+                                            title={t('updateTheme')}
+                                        >
+                                            💾 {t('updateTheme')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteThemeProfile()}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 12px', fontSize: '0.8rem', backgroundColor: config.errorColor, color: '#ffffff' }}
+                                            title={t('deleteTheme')}
+                                        >
+                                            ✕ {t('deleteTheme')}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Save Theme to Storage */}
+                            <div style={{
+                                marginTop: '12px',
+                                padding: '12px',
+                                backgroundColor: hexToRgba(config.panelBorderColor, 0.12),
+                                border: `1px dashed ${config.panelBorderColor}`,
+                                display: 'flex',
+                                gap: '10px',
+                                alignItems: 'center',
+                                flexWrap: 'wrap'
+                            }}>
+                                <input
+                                    type="text"
+                                    value={newThemeNameInput}
+                                    onChange={e => setNewThemeNameInput(e.target.value)}
+                                    placeholder={t('themeProfileName')}
+                                    style={{ ...styles.input, flex: 2, minWidth: '180px', padding: '8px' }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveThemeProfile(); } }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSaveThemeProfile}
+                                    style={{
+                                        ...styles.button,
+                                        margin: 0,
+                                        padding: '8px 14px',
+                                        fontSize: '0.85rem',
+                                        backgroundColor: effPrimaryButtonBgColor,
+                                        color: config.buttonTextColor,
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    + {t('saveAsNewThemeProfile')}
+                                </button>
+                            </div>
+                            {themeActionFeedback && (
+                                <div style={{ color: config.successColor, fontSize: '0.85rem', marginTop: '6px', textAlign: 'center' }}>
+                                    ✓ {themeActionFeedback}
+                                </div>
+                            )}
 
                             <div style={{borderTop: `1px solid ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
                             
+                            {/* Core Color Palette */}
                             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
                                 <div style={styles.colorPickerContainer}><label style={styles.label}>{t('background')}</label><input type="color" value={config.backgroundColor} onChange={e => updateConfig({ backgroundColor: e.target.value })} style={styles.colorInput} /></div>
                                 <div style={styles.colorPickerContainer}><label style={styles.label}>{t('panel')}</label><input type="color" value={config.panelColor} onChange={e => updateConfig({ panelColor: e.target.value })} style={styles.colorInput} /></div>
@@ -2608,6 +3756,234 @@ const App = () => {
                             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center', marginTop: '1rem'}}>
                                 <div style={styles.colorPickerContainer}><label style={styles.label}>{t('success')}</label><input type="color" value={config.successColor} onChange={e => updateConfig({ successColor: e.target.value })} style={styles.colorInput} /></div>
                                 <div style={styles.colorPickerContainer}><label style={styles.label}>{t('error')}</label><input type="color" value={config.errorColor} onChange={e => updateConfig({ errorColor: e.target.value })} style={styles.colorInput} /></div>
+                            </div>
+
+                            {/* Detailed / Granular Color Controls Toggle in Advanced Mode */}
+                            {config.themingMode === 'advanced' && (
+                                <>
+                                    <div style={{borderTop: `1px dashed ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAdvancedColors(!showAdvancedColors)}
+                                            style={{
+                                                ...styles.button,
+                                                margin: 0,
+                                                padding: '8px 12px',
+                                                fontSize: '0.85rem',
+                                                backgroundColor: 'transparent',
+                                                border: `2px solid ${effSecondaryButtonBgColor}`,
+                                                color: effSecondaryButtonBgColor,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {showAdvancedColors ? '▼ ' : '► '} {t('advancedColorControls')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleResetAdvancedColors}
+                                            style={{
+                                                ...styles.button,
+                                                margin: 0,
+                                                padding: '8px 12px',
+                                                fontSize: '0.8rem',
+                                                backgroundColor: 'transparent',
+                                                border: `1px solid ${config.panelBorderColor}`,
+                                                color: config.textColor,
+                                                opacity: 0.8
+                                            }}
+                                            title={t('resetAdvancedColors')}
+                                        >
+                                            ↺ {t('resetAdvancedColors')}
+                                        </button>
+                                    </div>
+
+                                    {showAdvancedColors && (
+                                        <div style={{
+                                            marginTop: '12px',
+                                            padding: '15px',
+                                            border: `1px solid ${config.panelBorderColor}`,
+                                            backgroundColor: hexToRgba(config.panelColor, 0.5),
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '15px'
+                                        }}>
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('headerColor')}</label>
+                                                    <input type="color" value={config.headerColor || config.accentColor1} onChange={e => updateConfig({ headerColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('secondaryTextColor')}</label>
+                                                    <input type="color" value={config.secondaryTextColor || config.accentColor2} onChange={e => updateConfig({ secondaryTextColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('buttonTextColor')}</label>
+                                                    <input type="color" value={config.buttonTextColor || '#0d0d0d'} onChange={e => updateConfig({ buttonTextColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('primaryButtonBgColor')}</label>
+                                                    <input type="color" value={config.primaryButtonBgColor || config.accentColor1} onChange={e => updateConfig({ primaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('secondaryButtonBgColor')}</label>
+                                                    <input type="color" value={config.secondaryButtonBgColor || config.accentColor2} onChange={e => updateConfig({ secondaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('dividerColor')}</label>
+                                                    <input type="color" value={config.dividerColor || config.accentColor2} onChange={e => updateConfig({ dividerColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('highlightColor')}</label>
+                                                    <input type="color" value={config.highlightColor || config.accentColor1} onChange={e => updateConfig({ highlightColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('donorNameColor')}</label>
+                                                    <input type="color" value={config.donorNameColor || config.highlightColor || config.accentColor1} onChange={e => updateConfig({ donorNameColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('progressBarColor')}</label>
+                                                    <input type="color" value={config.progressBarColor || config.accentColor1} onChange={e => updateConfig({ progressBarColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('progressBarBgColor')}</label>
+                                                    <input type="color" value={config.progressBarBgColor || config.panelColor} onChange={e => updateConfig({ progressBarBgColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('progressBarTextColor')}</label>
+                                                    <input type="color" value={config.progressBarTextColor || config.buttonTextColor} onChange={e => updateConfig({ progressBarTextColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('toastBgColor')}</label>
+                                                    <input type="color" value={config.toastBgColor || config.panelColor} onChange={e => updateConfig({ toastBgColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('toastBorderColor')}</label>
+                                                    <input type="color" value={config.toastBorderColor || config.accentColor1} onChange={e => updateConfig({ toastBorderColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('toastNameColor')}</label>
+                                                    <input type="color" value={config.toastNameColor || config.accentColor1} onChange={e => updateConfig({ toastNameColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('toastAmountColor')}</label>
+                                                    <input type="color" value={config.toastAmountColor || config.accentColor2} onChange={e => updateConfig({ toastAmountColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('inputBgColor')}</label>
+                                                    <input type="color" value={config.inputBgColor || config.panelColor} onChange={e => updateConfig({ inputBgColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                                <div style={styles.colorPickerContainer}>
+                                                    <label style={styles.label}>{t('inputBorderColor')}</label>
+                                                    <input type="color" value={config.inputBorderColor || config.accentColor2} onChange={e => updateConfig({ inputBorderColor: e.target.value })} style={styles.colorInput} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Live Theme Preview Box */}
+                            <div style={{borderTop: `1px solid ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
+                            <div style={{ textAlign: 'left', marginTop: '10px' }}>
+                                <label style={{ ...styles.label, marginBottom: '8px', display: 'block', fontWeight: 'bold' }}>{t('livePreview')}</label>
+                                <div style={{
+                                    backgroundColor: config.backgroundColor,
+                                    border: `2px solid ${config.panelBorderColor}`,
+                                    padding: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}>
+                                    <div style={{ color: effHeaderColor, fontSize: '1.2rem', fontFamily: config.fontFamily, textAlign: 'center' }}>
+                                        {t('sampleHeader')}
+                                    </div>
+                                    <div style={{ color: effSecondaryTextColor, fontSize: '0.85rem', fontFamily: config.fontFamily, textAlign: 'center' }}>
+                                        Goal: $2,000.00 | Total Raised: $1,250.00
+                                    </div>
+
+                                    {/* Preview Bar */}
+                                    <div style={{
+                                        width: '100%',
+                                        backgroundColor: effProgressBarBgColor,
+                                        border: `3px solid ${config.panelBorderColor}`,
+                                        padding: '4px',
+                                        boxSizing: 'border-box'
+                                    }}>
+                                        <div style={{
+                                            width: '62%',
+                                            height: '24px',
+                                            backgroundColor: effProgressBarColor,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: effProgressBarTextColor,
+                                            fontSize: '0.75rem',
+                                            fontFamily: config.fontFamily,
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden'
+                                        }}>
+                                            $1,250.00 (62%)
+                                        </div>
+                                    </div>
+
+                                    {/* Preview Toast Alert */}
+                                    <div style={{
+                                        backgroundColor: hexToRgba(effToastBgColor, 0.95),
+                                        border: `2px solid ${effToastBorderColor}`,
+                                        padding: '10px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <span style={{ color: effToastNameColor, fontWeight: 'bold', fontSize: '0.9rem', fontFamily: config.fontFamily }}>
+                                            {t('sampleDonor')}{' '}
+                                        </span>
+                                        <span style={{ color: effToastAmountColor, fontSize: '1rem', fontFamily: config.fontFamily }}>
+                                            {t('sampleDonated')}
+                                        </span>
+                                    </div>
+
+                                    {/* Sample Button & Granular Highlights */}
+                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                        <div style={{
+                                            backgroundColor: effPrimaryButtonBgColor,
+                                            color: config.buttonTextColor,
+                                            padding: '8px 16px',
+                                            fontSize: '0.85rem',
+                                            fontFamily: config.fontFamily,
+                                            textTransform: 'uppercase'
+                                        }}>
+                                            Primary Action
+                                        </div>
+                                        <div style={{
+                                            backgroundColor: effSecondaryButtonBgColor,
+                                            color: config.buttonTextColor,
+                                            padding: '8px 16px',
+                                            fontSize: '0.85rem',
+                                            fontFamily: config.fontFamily,
+                                            textTransform: 'uppercase'
+                                        }}>
+                                            Secondary Action
+                                        </div>
+                                    </div>
+                                    <div style={{ borderTop: `1px dashed ${effDividerColor}`, paddingTop: '8px', textAlign: 'center', fontSize: '0.85rem', color: effHighlightColor, fontFamily: config.fontFamily }}>
+                                        {t('sampleDonor')}: <span style={{ color: effDonorNameColor, fontWeight: 'bold' }}>HeroDonor42</span>
+                                    </div>
+                                </div>
                             </div>
                             </CollapsibleSection>
 
@@ -2664,7 +4040,7 @@ const App = () => {
                                     <button type="button" onClick={() => playSpecificSound(config.selectedMilestoneSound)} disabled={!config.isSoundEnabled} style={styles.previewButton}>{t('preview')}</button>
                                 </div>
 
-                                <div style={{borderTop: `2px dashed ${config.accentColor2}`, margin: '20px 0 0 0'}} />
+                                 <div style={{borderTop: `2px dashed ${effDividerColor}`, margin: '20px 0 0 0'}} />
 
                                 <h4 style={{...styles.label, opacity: 1, fontSize: '1.1rem', marginBottom: '0' }}>{t('customSoundLibrary')}</h4>
                                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -2687,7 +4063,7 @@ const App = () => {
                                     accept="audio/mp3,audio/wav,audio/ogg" 
                                     style={{ display: 'none' }} 
                                 />
-                                <button type="button" onClick={() => soundFileInputRef.current?.click()} style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}>
+                                <button type="button" onClick={() => soundFileInputRef.current?.click()} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}>
                                     {t('uploadNewSound')}
                                 </button>
                                 
@@ -2700,7 +4076,7 @@ const App = () => {
                                     >
                                         {availableSoundFiles.length === 0 && <option value="">{t('noSoundsFound')}</option>}
                                         {availableSoundFiles.map(file => (
-                                            <option key={file} value={file}>{file}</option>
+                                             <option key={file} value={file}>{file}</option>
                                         ))}
                                     </select>
                                     <button 
@@ -2715,7 +4091,7 @@ const App = () => {
                                         type="button" 
                                         onClick={handleAddSoundFromList} 
                                         disabled={availableSoundFiles.length === 0 || !selectedSoundFile}
-                                        style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}
+                                        style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0}}
                                     >
                                         {t('add')}
                                     </button>
@@ -2889,11 +4265,11 @@ const App = () => {
                                     <button 
                                         type="button" 
                                         onClick={handleExportConfig} 
-                                        style={{...styles.button, backgroundColor: config.accentColor2, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1}}
+                                        style={{...styles.button, backgroundColor: effSecondaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1}}
                                     >
                                         {t('exportConfig')}
                                     </button>
-                                    <label style={{...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1, textAlign: 'center', cursor: 'pointer'}}>
+                                    <label style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 15px', margin: 0, flex: 1, textAlign: 'center', cursor: 'pointer'}}>
                                         {t('importConfig')}
                                         <input 
                                             type="file" 
@@ -2914,6 +4290,8 @@ const App = () => {
                     </div>
                 </div>
             </div>
+              </>
+            )}
           </>
         )}
         
@@ -2933,10 +4311,43 @@ const App = () => {
             
             {overlayType === 'milestone' && <NextMilestoneOverlay milestones={milestones} totalRaised={totalRaised} currencyPrefix={currencyPrefix} convertAmount={convertAmount} styles={styles} successColor={config.successColor} t={t} />}
             {overlayType === 'team' && <TeamOverlay styles={styles} currencyPrefix={currencyPrefix} convertAmount={convertAmount} teamTotalRaised={teamTotalRaised} successColor={config.successColor} backgroundColor={config.backgroundColor} hexToRgba={hexToRgba} teamName={teamName} t={t} />}
-            {overlayType === 'celebration' && <CelebrationOverlay playSound={playSpecificSound} accentColor1={config.accentColor1} accentColor2={config.accentColor2} successColor={config.successColor} celebrationDuration={config.celebrationDuration} activeCelebrationKey={celebrationKey} />}
-            {overlayType === 'schedule' && <ScheduleOverlay items={config.scheduleItems} styles={styles} accentColor1={config.accentColor1} accentColor2={config.accentColor2} textColor={config.textColor} fontFamily={config.fontFamily} t={t} />}
+            {overlayType === 'team-dashboard' && (
+              <TeamDashboardView
+                styles={styles}
+                config={config}
+                currencyPrefix={currencyPrefix}
+                convertAmount={convertAmount}
+                teamTotalRaised={teamTotalRaised}
+                teamGoal={teamGoal}
+                teamName={teamName}
+                teamDonations={teamDonations}
+                teamParticipants={teamParticipants}
+                participantId={config.participantId}
+                participantName={participantName}
+                participantDonations={donations}
+                participantTotalRaised={totalRaised}
+                participantGoal={goal}
+                selectedAccountId={selectedAccountId}
+                setSelectedAccountId={setSelectedAccountId}
+                t={t}
+                isOverlay={true}
+                effHeaderColor={effHeaderColor}
+                effSecondaryTextColor={effSecondaryTextColor}
+                effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                effDividerColor={effDividerColor}
+                effHighlightColor={effHighlightColor}
+                effDonorNameColor={effDonorNameColor}
+                effProgressBarColor={effProgressBarColor}
+                hexToRgba={hexToRgba}
+                lastFetchedAt={lastFetchedAt}
+                onManualSync={handleManualSync}
+              />
+            )}
+            {overlayType === 'celebration' && <CelebrationOverlay playSound={playSpecificSound} accentColor1={config.accentColor1} accentColor2={config.accentColor2} primaryColor={effPrimaryButtonBgColor} secondaryColor={effSecondaryButtonBgColor} successColor={config.successColor} celebrationDuration={config.celebrationDuration} activeCelebrationKey={celebrationKey} />}
+            {overlayType === 'schedule' && <ScheduleOverlay items={config.scheduleItems} styles={styles} accentColor1={config.accentColor1} accentColor2={config.accentColor2} timeColor={effHighlightColor} dividerColor={effDividerColor} headerColor={effHeaderColor} textColor={config.textColor} fontFamily={config.fontFamily} t={t} />}
             {overlayType === 'sponsors' && <SponsorOverlay sponsors={config.sponsors} styles={styles} animationDuration={config.sponsorDisplayDuration} t={t} />}
-            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} t={t} />}
+            {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} highlightColor={effHighlightColor} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} t={t} />}
           </>
         )}
       </div>

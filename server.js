@@ -320,8 +320,12 @@ class Profile {
             milestones: [],
             totalRaised: 0,
             goal: 0,
+            participantName: '',
             teamTotalRaised: 0,
+            teamGoal: 0,
             teamName: '',
+            teamDonations: [],
+            teamParticipants: [],
             conversionRate: 1.0
         };
         this.seenDonationIds = new Set();
@@ -518,6 +522,7 @@ export async function fetchProfileData(profile) {
 
         profile.data.totalRaised = newTotal;
         profile.data.goal = newGoal;
+        profile.data.participantName = userJson.displayName || '';
 
         // 2. Donations
         const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
@@ -592,11 +597,30 @@ export async function fetchProfileData(profile) {
         }
 
         if (currentTeamId) {
-             const teamRes = await fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`);
-             const teamJson = await teamRes.json();
-             if (teamJson) {
-                 profile.data.teamTotalRaised = teamJson.sumDonations || 0;
-                 profile.data.teamName = teamJson.name || '';
+             try {
+                 const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
+                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`).catch(e => null),
+                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(e => null),
+                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/participants`).catch(e => null)
+                 ]);
+                 if (teamRes && teamRes.ok) {
+                     const teamJson = await teamRes.json();
+                     if (teamJson) {
+                         profile.data.teamTotalRaised = teamJson.sumDonations || 0;
+                         profile.data.teamGoal = teamJson.fundraisingGoal || 0;
+                         profile.data.teamName = teamJson.name || '';
+                     }
+                 }
+                 if (teamDonRes && teamDonRes.ok) {
+                     const teamDonJson = await teamDonRes.json();
+                     profile.data.teamDonations = Array.isArray(teamDonJson) ? teamDonJson : [];
+                 }
+                 if (teamPartRes && teamPartRes.ok) {
+                     const teamPartJson = await teamPartRes.json();
+                     profile.data.teamParticipants = Array.isArray(teamPartJson) ? teamPartJson : [];
+                 }
+             } catch (e) {
+                 console.warn(`[${profile.id}] Error fetching team details:`, e.message);
              }
         }
 
