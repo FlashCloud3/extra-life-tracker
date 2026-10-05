@@ -118,42 +118,218 @@ const findMatchingPreset = (colors: { [key: string]: string; }) => {
 
 // === OVERLAY & UI COMPONENTS (defined outside App for stability) ===
 
-const NextMilestoneOverlay = ({ milestones, totalRaised, currencyPrefix, convertAmount, styles, successColor, t }: any) => {
-    const nextMilestone = useMemo(() => milestones.find((m: any) => totalRaised < m.fundraisingGoal), [milestones, totalRaised]);
+const NextMilestoneOverlay = ({
+    milestones,
+    totalRaised,
+    currencyPrefix,
+    convertAmount,
+    styles,
+    config,
+    successColor,
+    effProgressBarColor,
+    effProgressBarBgColor,
+    effProgressBarTextColor,
+    effProgressBarBorderColor,
+    effSecondaryTextColor,
+    hexToRgba,
+    t
+}: any) => {
+    // Optional URL parameter override (&mode=step or &mode=relative vs &mode=cumulative)
+    const urlMode = useMemo(() => {
+        if (typeof window === 'undefined') return null;
+        const p = new URLSearchParams(window.location.search).get('mode');
+        if (p === 'step' || p === 'relative') return 'relative';
+        if (p === 'cumulative' || p === 'total') return 'cumulative';
+        return null;
+    }, []);
 
-    if (!nextMilestone) {
+    const progressMode = urlMode || config?.milestoneProgressMode || 'cumulative';
+
+    // 1. Sanitize & sort milestones ascending by fundraisingGoal (safely handling strings and numbers)
+    const sortedMilestones = useMemo(() => {
+        if (!Array.isArray(milestones) || milestones.length === 0) return [];
+        return milestones
+            .map((m: any) => {
+                const rawGoal = m?.fundraisingGoal ?? m?.goal;
+                const goalNum = typeof rawGoal === 'number'
+                    ? rawGoal
+                    : parseFloat(String(rawGoal || '0').replace(/[^0-9.-]/g, ''));
+                return {
+                    ...m,
+                    milestoneID: m?.milestoneID || m?.id || String(goalNum),
+                    fundraisingGoal: isNaN(goalNum) ? 0 : goalNum,
+                    description: m?.description || m?.title || m?.name || ''
+                };
+            })
+            .filter((m: any) => m && m.fundraisingGoal > 0)
+            .sort((a: any, b: any) => a.fundraisingGoal - b.fundraisingGoal);
+    }, [milestones]);
+
+    // Parse current total raised safely
+    const numRaised = useMemo(() => {
+        if (typeof totalRaised === 'number' && !isNaN(totalRaised)) return totalRaised;
+        const parsed = parseFloat(String(totalRaised || '0').replace(/[^0-9.-]/g, ''));
+        return isNaN(parsed) ? 0 : parsed;
+    }, [totalRaised]);
+
+    // 2. Find next uncompleted milestone
+    const nextMilestone = useMemo(() => {
+        return sortedMilestones.find((m: any) => numRaised < m.fundraisingGoal);
+    }, [sortedMilestones, numRaised]);
+
+    const barBg = effProgressBarBgColor || config?.milestoneProgressBarBgColor || config?.progressBarBgColor || '#1a1a1a';
+    const barColor = effProgressBarColor || config?.milestoneProgressBarColor || config?.progressBarColor || config?.successColor || '#00ff00';
+    const barTextColor = effProgressBarTextColor || config?.milestoneProgressBarTextColor || config?.progressBarTextColor || '#ffffff';
+    const borderColor = effProgressBarBorderColor || config?.milestoneProgressBarBorderColor || config?.progressBarBorderColor || config?.panelBorderColor || '#00ffff';
+    const secTextColor = effSecondaryTextColor || config?.secondaryTextColor || '#aaaaaa';
+    const resolvedHexToRgba = hexToRgba || ((hex: string, alpha: number) => hex);
+
+    // 3. If no milestones found at all
+    if (sortedMilestones.length === 0) {
         return (
-            <div style={{...styles.progressBarContainer, textAlign: 'center'}}>
-                <h2 style={{...styles.milestoneDescription, color: successColor}}>{t('allMilestonesComplete')}</h2>
+            <div style={{
+                ...styles.progressBarContainer,
+                backgroundColor: barBg,
+                border: `4px solid ${borderColor}`,
+                textAlign: 'center'
+            }}>
+                <h2 style={{...styles.milestoneDescription, color: secTextColor, margin: 0}}>
+                    {t('noMilestones') || 'No Milestones Found'}
+                </h2>
             </div>
         );
     }
-    
-    const milestoneIndex = milestones.findIndex((m: any) => m.milestoneID === nextMilestone.milestoneID);
-    const previousMilestoneGoal = milestoneIndex > 0 ? milestones[milestoneIndex - 1].fundraisingGoal : 0;
 
-    const amountForThisMilestone = Math.max(0, totalRaised - previousMilestoneGoal);
-    const goalForThisMilestone = nextMilestone.fundraisingGoal - previousMilestoneGoal;
-    const milestoneProgressPercentage = goalForThisMilestone <= 0 ? 100 : Math.min((amountForThisMilestone / goalForThisMilestone) * 100, 100);
+    // 4. If all milestones have been reached
+    if (!nextMilestone) {
+        return (
+            <div style={{
+                ...styles.progressBarContainer,
+                backgroundColor: barBg,
+                border: `4px solid ${borderColor}`,
+                textAlign: 'center'
+            }}>
+                <h2 style={{...styles.milestoneDescription, color: successColor || config?.successColor || '#00ff00', margin: 0}}>
+                    {t('allMilestonesComplete')}
+                </h2>
+            </div>
+        );
+    }
+
+    // 5. Determine previous milestone goal (for step/relative calculations)
+    const milestoneIndex = sortedMilestones.findIndex((m: any) =>
+        (m.milestoneID && nextMilestone.milestoneID && m.milestoneID === nextMilestone.milestoneID) ||
+        m === nextMilestone
+    );
+    const previousMilestoneGoal = milestoneIndex > 0 ? sortedMilestones[milestoneIndex - 1].fundraisingGoal : 0;
+
+    // 6. Calculations
+    const targetGoal = nextMilestone.fundraisingGoal;
+    const remainingTotal = Math.max(0, targetGoal - numRaised);
+
+    // Cumulative percentage (0 to targetGoal)
+    const cumulativePercentage = targetGoal > 0
+        ? Math.min(100, Math.max(0, (numRaised / targetGoal) * 100))
+        : 100;
+
+    // Step/Relative percentage (previousMilestoneGoal to targetGoal)
+    const stepGoal = Math.max(0, targetGoal - previousMilestoneGoal);
+    const stepRaised = Math.min(stepGoal, Math.max(0, numRaised - previousMilestoneGoal));
+    const stepPercentage = stepGoal > 0
+        ? Math.min(100, Math.max(0, (stepRaised / stepGoal) * 100))
+        : 100;
+
+    // Active percentage used for bar fill
+    const activePercentage = progressMode === 'relative' ? stepPercentage : cumulativePercentage;
+
+    // Center text inside progress bar track
+    const centerText = progressMode === 'relative'
+        ? `${currencyPrefix}${convertAmount(stepRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / ${currencyPrefix}${convertAmount(stepGoal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${activePercentage.toFixed(1)}%)`
+        : `${currencyPrefix}${convertAmount(numRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / ${currencyPrefix}${convertAmount(targetGoal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${activePercentage.toFixed(1)}%)`;
 
     return (
-        <div style={styles.progressBarContainer}>
-            <h2 style={styles.milestoneDescription}>{t('nextGoal')}: {nextMilestone.description}</h2>
-            <div style={{...styles.progressBar, width: `${milestoneProgressPercentage}%`}}>
-                <span style={styles.progressText}>
-                    {currencyPrefix}{convertAmount(totalRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                </span>
+        <div style={{
+            ...styles.progressBarContainer,
+            backgroundColor: barBg,
+            border: `4px solid ${borderColor}`
+        }}>
+            <h2 style={styles.milestoneDescription}>
+                {t('nextGoal')}: {nextMilestone.description}
+            </h2>
+
+            {/* Progress Bar Track with Smooth Fill & Always-Visible Centered Text */}
+            <div style={{
+                position: 'relative',
+                width: '100%',
+                height: '42px',
+                backgroundColor: barBg,
+                border: `2px solid ${resolvedHexToRgba(borderColor, 0.4)}`,
+                overflow: 'hidden',
+                boxSizing: 'border-box' as const
+            }}>
+                <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, Math.max(0, activePercentage))}%`,
+                    backgroundColor: barColor,
+                    transition: 'width 0.5s ease-in-out'
+                }} />
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: barTextColor,
+                    fontFamily: config?.fontFamily || styles.progressBarContainer?.fontFamily,
+                    fontSize: '1.15rem',
+                    fontWeight: 'bold',
+                    textShadow: `1px 1px 2px ${resolvedHexToRgba(config?.backgroundColor || '#000000', 0.85)}`,
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap',
+                    padding: '0 10px',
+                    boxSizing: 'border-box' as const
+                }}>
+                    {centerText}
+                </div>
             </div>
-            <div style={styles.goalText}>
-                {t('goal')}: {currencyPrefix}{convertAmount(nextMilestone.fundraisingGoal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+
+            {/* Goal & Remaining Info Bar */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: '10px',
+                color: secTextColor,
+                fontSize: '0.95rem',
+                fontFamily: config?.fontFamily || styles.progressBarContainer?.fontFamily,
+                flexWrap: 'wrap' as const,
+                gap: '8px'
+            }}>
+                <div>
+                    {t('goal')}: <span style={{ color: config?.textColor || '#ffffff', fontWeight: 'bold' }}>{currencyPrefix}{convertAmount(targetGoal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    {progressMode === 'relative' && previousMilestoneGoal > 0 && (
+                        <span style={{ fontSize: '0.8rem', opacity: 0.75, marginLeft: '6px' }}>
+                            ({t('teamTotal') ? t('teamTotal').split(' ')[0] : 'Total'}: {currencyPrefix}{convertAmount(numRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})})
+                        </span>
+                    )}
+                </div>
+                {remainingTotal > 0 && (
+                    <div style={{ opacity: 0.85 }}>
+                        {currencyPrefix}{convertAmount(remainingTotal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} {t('toGo')}
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
 const TeamOverlay = ({ styles, currencyPrefix, convertAmount, teamTotalRaised, successColor, backgroundColor, hexToRgba, teamName, t }: any) => {
+    const containerStyle = styles.overlayContainer || styles.progressBarContainer;
     return (
-      <div style={{...styles.progressBarContainer, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', boxSizing: 'border-box' as const}}>
+      <div style={{...containerStyle, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', boxSizing: 'border-box' as const}}>
         <span style={{...styles.label, opacity: 1, fontSize: '0.9rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', padding: '0 5px'}}>
             {teamName || t('teamTotal')}
         </span>
@@ -191,6 +367,9 @@ interface TeamDashboardViewProps {
   effHighlightColor: string;
   effDonorNameColor: string;
   effProgressBarColor: string;
+  effProgressBarBgColor?: string;
+  effProgressBarTextColor?: string;
+  effProgressBarBorderColor?: string;
   hexToRgba: (hex: string, alpha: number) => string;
   lastFetchedAt: Date | null;
   onManualSync?: () => void;
@@ -223,10 +402,18 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
   effHighlightColor,
   effDonorNameColor,
   effProgressBarColor,
+  effProgressBarBgColor,
+  effProgressBarTextColor,
+  effProgressBarBorderColor,
   hexToRgba,
   lastFetchedAt,
   onManualSync,
 }) => {
+  const pbBg = effProgressBarBgColor || config.progressBarBgColor || '#1a1a1a';
+  const pbFill = effProgressBarColor || config.progressBarColor || config.successColor || '#00ff00';
+  const pbText = effProgressBarTextColor || config.progressBarTextColor || '#ffffff';
+  const pbBorder = effProgressBarBorderColor || config.progressBarBorderColor || config.panelBorderColor || '#00ffff';
+
   const [teamSearch, setTeamSearch] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
   const [fetchedAccounts, setFetchedAccounts] = useState<Record<string, { donations: any[]; total: number; goal: number; name: string }>>({});
@@ -363,9 +550,48 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
         </p>
 
         {teamGoal > 0 && (
-          <div style={styles.progressBarContainer}>
-            <div style={{ ...styles.progressBar, width: `${teamProgress}%`, backgroundColor: effProgressBarColor }}>
-              <span style={styles.progressText}>{teamProgress.toFixed(1)}%</span>
+          <div style={{
+            width: '100%',
+            maxWidth: '650px',
+            backgroundColor: pbBg,
+            border: `2px solid ${pbBorder}`,
+            padding: '4px',
+            boxSizing: 'border-box' as const,
+            marginTop: '8px'
+          }}>
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              height: '32px',
+              backgroundColor: pbBg,
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${teamProgress}%`,
+                backgroundColor: pbFill,
+                transition: 'width 0.5s ease-in-out'
+              }} />
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: pbText,
+                fontSize: '0.9rem',
+                fontFamily: config.fontFamily,
+                fontWeight: 'bold',
+                textShadow: `1px 1px 2px ${hexToRgba(config.backgroundColor, 0.85)}`,
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                padding: '0 8px'
+              }}>
+                {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({teamProgress.toFixed(1)}%)
+              </div>
             </div>
           </div>
         )}
@@ -671,17 +897,37 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
                   <span>{accountProgress.toFixed(1)}%</span>
                 </div>
                 <div style={{
-                  height: '8px',
-                  backgroundColor: config.progressBarBgColor || '#222',
-                  borderRadius: '4px',
+                  position: 'relative',
+                  height: '16px',
+                  backgroundColor: pbBg,
+                  border: `1px solid ${pbBorder}`,
+                  borderRadius: '3px',
                   overflow: 'hidden'
                 }}>
                   <div style={{
                     width: `${accountProgress}%`,
                     height: '100%',
-                    backgroundColor: effProgressBarColor,
+                    backgroundColor: pbFill,
                     transition: 'width 0.4s ease'
                   }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: pbText,
+                    fontSize: '0.65rem',
+                    fontFamily: config.fontFamily,
+                    fontWeight: 'bold',
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {currencyPrefix}{convertAmount(activeAccountTotal).toFixed(2)} / {currencyPrefix}{convertAmount(activeAccountGoal).toFixed(2)} ({accountProgress.toFixed(1)}%)
+                  </div>
                 </div>
               </div>
             )}
@@ -800,13 +1046,15 @@ const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor,
     const effDivColor = dividerColor || accentColor2 || '#00ffff';
     const effHColor = headerColor || accentColor1 || '#ff00ff';
 
+    const containerStyle = styles.overlayContainer || styles.progressBarContainer;
+
     if (!items || items.length === 0) {
-        return <div style={{...styles.progressBarContainer, textAlign: 'center', padding: '20px'}}>
+        return <div style={{...containerStyle, textAlign: 'center', padding: '20px'}}>
             <h2 style={{...styles.milestoneDescription}}>{t('noScheduleSet')}</h2>
         </div>
     }
     return (
-        <div style={{...styles.progressBarContainer, padding: '20px'}}>
+        <div style={{...containerStyle, padding: '20px'}}>
             <h2 style={{...styles.milestoneDescription, textAlign: 'center', borderBottom: `2px solid ${effDivColor}`, paddingBottom: '10px', marginBottom: '10px', color: effHColor }}>{t('streamSchedule')}</h2>
             <div style={{ maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
                 {items.map(item => {
@@ -839,6 +1087,7 @@ const ScheduleOverlay = ({ items, styles, accentColor1, accentColor2, textColor,
 
 const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => {
     const [index, setIndex] = useState(0);
+    const containerStyle = styles.overlayContainer || styles.progressBarContainer;
 
     useEffect(() => {
         if (!sponsors || sponsors.length <= 1) return;
@@ -850,7 +1099,7 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
 
     if (!sponsors || sponsors.length === 0) {
         return (
-             <div style={{...styles.progressBarContainer, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+             <div style={{...containerStyle, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
                 <span style={{...styles.label, opacity: 0.5}}>{t('noSponsorsAdded')}</span>
             </div>
         );
@@ -869,9 +1118,9 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
             justifyContent: 'center', 
             alignItems: 'center', 
             overflow: 'hidden', 
-            padding: styles.progressBarContainer.padding,
-            backgroundColor: styles.progressBarContainer.backgroundColor,
-            border: styles.progressBarContainer.border,
+            padding: containerStyle.padding,
+            backgroundColor: containerStyle.backgroundColor,
+            border: containerStyle.border,
             boxSizing: 'border-box'
         }}>
              <img 
@@ -982,6 +1231,7 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
     };
 
     const alignStyle = getAlignmentStyles();
+    const containerStyle = styles.overlayContainer || styles.progressBarContainer;
 
     return (
         <div style={{
@@ -990,10 +1240,10 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
             display: 'flex',
             justifyContent: alignStyle.justifyContent,
             alignItems: alignStyle.alignItems,
-            backgroundColor: styles.progressBarContainer.backgroundColor,
+            backgroundColor: containerStyle.backgroundColor,
             color: textColor,
             fontFamily: fontFamily,
-            border: styles.progressBarContainer.border,
+            border: containerStyle.border,
             boxSizing: 'border-box',
             padding: '40px',
             overflow: 'hidden'
@@ -1232,6 +1482,12 @@ const App = () => {
           progressBarColor?: string;
           progressBarBgColor?: string;
           progressBarTextColor?: string;
+          progressBarBorderColor?: string;
+          splitMilestoneColors?: boolean;
+          milestoneProgressBarColor?: string;
+          milestoneProgressBarBgColor?: string;
+          milestoneProgressBarTextColor?: string;
+          milestoneProgressBarBorderColor?: string;
           toastBgColor?: string;
           toastBorderColor?: string;
           toastNameColor?: string;
@@ -1377,6 +1633,7 @@ const App = () => {
     eventStartTime: '',
     celebrationDuration: 15,
     language: 'en',
+    milestoneProgressMode: 'cumulative' as 'cumulative' | 'relative',
     
     // Twitch
     twitchEnabled: false,
@@ -1407,6 +1664,12 @@ const App = () => {
     progressBarColor: '',
     progressBarBgColor: '',
     progressBarTextColor: '',
+    progressBarBorderColor: '',
+    splitMilestoneColors: false,
+    milestoneProgressBarColor: '',
+    milestoneProgressBarBgColor: '',
+    milestoneProgressBarTextColor: '',
+    milestoneProgressBarBorderColor: '',
     toastBgColor: '',
     toastBorderColor: '',
     toastNameColor: '',
@@ -1452,6 +1715,7 @@ const App = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeSourcesRef = useRef<Set<AudioScheduledSourceNode>>(new Set());
   const soundFileInputRef = useRef<HTMLInputElement>(null);
+  const themeFileInputRef = useRef<HTMLInputElement>(null);
   const configRef = useRef(config);
 
   // Sync configRef and runtime refs with state
@@ -1888,7 +2152,10 @@ const App = () => {
 
           // 3. Milestones
           const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones`);
-          const mileData = mileRes.ok ? await mileRes.json() : [];
+          const rawMileData = mileRes.ok ? await mileRes.json() : [];
+          const mileData = Array.isArray(rawMileData)
+              ? [...rawMileData].sort((a: any, b: any) => (a.fundraisingGoal || 0) - (b.fundraisingGoal || 0))
+              : [];
 
           // 4. Team Details (optional)
           let tRaised = 0;
@@ -2438,6 +2705,12 @@ const App = () => {
                 progressBarColor: '',
                 progressBarBgColor: '',
                 progressBarTextColor: '',
+                progressBarBorderColor: '',
+                splitMilestoneColors: false,
+                milestoneProgressBarColor: '',
+                milestoneProgressBarBgColor: '',
+                milestoneProgressBarTextColor: '',
+                milestoneProgressBarBorderColor: '',
                 toastBgColor: '',
                 toastBorderColor: '',
                 toastNameColor: '',
@@ -2479,6 +2752,12 @@ const App = () => {
         progressBarColor: config.progressBarColor,
         progressBarBgColor: config.progressBarBgColor,
         progressBarTextColor: config.progressBarTextColor,
+        progressBarBorderColor: config.progressBarBorderColor,
+        splitMilestoneColors: config.splitMilestoneColors,
+        milestoneProgressBarColor: config.milestoneProgressBarColor,
+        milestoneProgressBarBgColor: config.milestoneProgressBarBgColor,
+        milestoneProgressBarTextColor: config.milestoneProgressBarTextColor,
+        milestoneProgressBarBorderColor: config.milestoneProgressBarBorderColor,
         toastBgColor: config.toastBgColor,
         toastBorderColor: config.toastBorderColor,
         toastNameColor: config.toastNameColor,
@@ -2525,6 +2804,12 @@ const App = () => {
             progressBarColor: config.progressBarColor,
             progressBarBgColor: config.progressBarBgColor,
             progressBarTextColor: config.progressBarTextColor,
+            progressBarBorderColor: config.progressBarBorderColor,
+            splitMilestoneColors: config.splitMilestoneColors,
+            milestoneProgressBarColor: config.milestoneProgressBarColor,
+            milestoneProgressBarBgColor: config.milestoneProgressBarBgColor,
+            milestoneProgressBarTextColor: config.milestoneProgressBarTextColor,
+            milestoneProgressBarBorderColor: config.milestoneProgressBarBorderColor,
             toastBgColor: config.toastBgColor,
             toastBorderColor: config.toastBorderColor,
             toastNameColor: config.toastNameColor,
@@ -2557,6 +2842,262 @@ const App = () => {
     setTimeout(() => setThemeActionFeedback(null), 3000);
   };
 
+  const handleLoadSavedTheme = (theme: SavedThemeProfile) => {
+    if (!theme) return;
+    setSelectedPreset(`profile:${theme.id}`);
+    updateConfig({
+      ...theme.colors,
+      ...(theme.fontFamily ? { fontFamily: theme.fontFamily } : {}),
+      ...(theme.notificationAnimation ? { notificationAnimation: theme.notificationAnimation } : {})
+    });
+  };
+
+  const handleExportThemeProfile = (themeToExport?: SavedThemeProfile) => {
+    let targetProfile = themeToExport;
+    if (!targetProfile) {
+      if (selectedPreset.startsWith('profile:')) {
+        const profileId = selectedPreset.replace('profile:', '');
+        targetProfile = savedThemes.find(th => th.id === profileId);
+      }
+    }
+
+    if (!targetProfile) {
+      const currentName = newThemeNameInput.trim() || 'Custom Theme';
+      targetProfile = {
+        id: `theme-${Date.now()}`,
+        name: currentName,
+        colors: {
+          backgroundColor: config.backgroundColor,
+          textColor: config.textColor,
+          panelColor: config.panelColor,
+          panelBorderColor: config.panelBorderColor,
+          accentColor1: config.accentColor1,
+          accentColor2: config.accentColor2,
+          successColor: config.successColor,
+          errorColor: config.errorColor,
+          buttonTextColor: config.buttonTextColor,
+          headerColor: config.headerColor,
+          secondaryTextColor: config.secondaryTextColor,
+          primaryButtonBgColor: config.primaryButtonBgColor,
+          secondaryButtonBgColor: config.secondaryButtonBgColor,
+          dividerColor: config.dividerColor,
+          highlightColor: config.highlightColor,
+          donorNameColor: config.donorNameColor,
+          progressBarColor: config.progressBarColor,
+          progressBarBgColor: config.progressBarBgColor,
+          progressBarTextColor: config.progressBarTextColor,
+          progressBarBorderColor: config.progressBarBorderColor,
+          splitMilestoneColors: config.splitMilestoneColors,
+          milestoneProgressBarColor: config.milestoneProgressBarColor,
+          milestoneProgressBarBgColor: config.milestoneProgressBarBgColor,
+          milestoneProgressBarTextColor: config.milestoneProgressBarTextColor,
+          milestoneProgressBarBorderColor: config.milestoneProgressBarBorderColor,
+          toastBgColor: config.toastBgColor,
+          toastBorderColor: config.toastBorderColor,
+          toastNameColor: config.toastNameColor,
+          toastAmountColor: config.toastAmountColor,
+          inputBgColor: config.inputBgColor,
+          inputBorderColor: config.inputBorderColor,
+        },
+        fontFamily: config.fontFamily,
+        notificationAnimation: config.notificationAnimation
+      };
+    }
+
+    const exportPayload = {
+      type: 'extralife-custom-theme',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      theme: targetProfile
+    };
+
+    const sanitizedName = (targetProfile.name || 'custom_theme')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_')
+      .replace(/_+/g, '_');
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `extralife-theme-${sanitizedName}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    setThemeActionFeedback(`${t('themeExportedSuccess')} (${targetProfile.name})`);
+    setTimeout(() => setThemeActionFeedback(null), 3000);
+  };
+
+  const handleExportAllThemes = () => {
+    if (savedThemes.length === 0) {
+      setFormError(t('noThemesToExport'));
+      return;
+    }
+    const exportPayload = {
+      type: 'extralife-custom-themes-collection',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      themes: savedThemes
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `extralife-custom-themes-${savedThemes.length}-themes.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    setThemeActionFeedback(`${t('themeExportedSuccess')} (${savedThemes.length} ${t('savedThemeProfiles')})`);
+    setTimeout(() => setThemeActionFeedback(null), 3000);
+  };
+
+  const handleImportThemeProfile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFormError('');
+
+    const fallbackName = file.name ? file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, ' ') : 'Imported Theme';
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+        
+        let candidateThemes: any[] = [];
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.type === 'extralife-custom-theme' && parsed.theme && typeof parsed.theme === 'object') {
+            candidateThemes = [parsed.theme];
+          } else if (parsed.type === 'extralife-custom-themes-collection' && Array.isArray(parsed.themes)) {
+            candidateThemes = parsed.themes;
+          } else if (Array.isArray(parsed.themes)) {
+            candidateThemes = parsed.themes;
+          } else if (Array.isArray(parsed.savedThemeProfiles)) {
+            candidateThemes = parsed.savedThemeProfiles;
+          } else if (Array.isArray(parsed)) {
+            candidateThemes = parsed;
+          } else if (parsed.colors && typeof parsed.colors === 'object') {
+            candidateThemes = [parsed];
+          } else if (parsed.backgroundColor || parsed.panelColor || parsed.textColor) {
+            candidateThemes = [{
+              name: parsed.name || fallbackName,
+              colors: parsed,
+              fontFamily: parsed.fontFamily,
+              notificationAnimation: parsed.notificationAnimation
+            }];
+          }
+        }
+
+        if (candidateThemes.length === 0) {
+          setFormError(t('themeImportError'));
+          return;
+        }
+
+        const existingIds = new Set(savedThemes.map(s => s.id));
+        const newProfiles: SavedThemeProfile[] = [];
+
+        candidateThemes.forEach((item, index) => {
+          if (!item || typeof item !== 'object') return;
+          const rawColors = (item.colors && typeof item.colors === 'object') ? item.colors : item;
+          
+          let profileId = item.id;
+          if (!profileId || existingIds.has(profileId)) {
+            profileId = `theme-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`;
+          }
+          existingIds.add(profileId);
+
+          const themeName = (item.name && typeof item.name === 'string' && item.name.trim()) 
+            ? item.name.trim() 
+            : (candidateThemes.length === 1 ? fallbackName : `${fallbackName} ${index + 1}`);
+
+          const cleanedColors: any = {
+            backgroundColor: rawColors.backgroundColor || '#0a0a14',
+            textColor: rawColors.textColor || '#ffffff',
+            panelColor: rawColors.panelColor || '#141424',
+            panelBorderColor: rawColors.panelBorderColor || '#00ffff',
+            accentColor1: rawColors.accentColor1 || '#00ffff',
+            accentColor2: rawColors.accentColor2 || '#ff00ff',
+            successColor: rawColors.successColor || '#00ff66',
+            errorColor: rawColors.errorColor || '#ff3366',
+            buttonTextColor: rawColors.buttonTextColor || '#ffffff',
+            headerColor: rawColors.headerColor || '',
+            secondaryTextColor: rawColors.secondaryTextColor || '',
+            primaryButtonBgColor: rawColors.primaryButtonBgColor || '',
+            secondaryButtonBgColor: rawColors.secondaryButtonBgColor || '',
+            dividerColor: rawColors.dividerColor || '',
+            highlightColor: rawColors.highlightColor || '',
+            donorNameColor: rawColors.donorNameColor || '',
+            progressBarColor: rawColors.progressBarColor || '',
+            progressBarBgColor: rawColors.progressBarBgColor || '',
+            progressBarTextColor: rawColors.progressBarTextColor || '',
+            progressBarBorderColor: rawColors.progressBarBorderColor || '',
+            splitMilestoneColors: !!rawColors.splitMilestoneColors,
+            milestoneProgressBarColor: rawColors.milestoneProgressBarColor || '',
+            milestoneProgressBarBgColor: rawColors.milestoneProgressBarBgColor || '',
+            milestoneProgressBarTextColor: rawColors.milestoneProgressBarTextColor || '',
+            milestoneProgressBarBorderColor: rawColors.milestoneProgressBarBorderColor || '',
+            toastBgColor: rawColors.toastBgColor || '',
+            toastBorderColor: rawColors.toastBorderColor || '',
+            toastNameColor: rawColors.toastNameColor || '',
+            toastAmountColor: rawColors.toastAmountColor || '',
+            inputBgColor: rawColors.inputBgColor || '',
+            inputBorderColor: rawColors.inputBorderColor || '',
+          };
+
+          newProfiles.push({
+            id: profileId,
+            name: themeName,
+            colors: cleanedColors,
+            fontFamily: item.fontFamily || undefined,
+            notificationAnimation: item.notificationAnimation || undefined
+          });
+        });
+
+        if (newProfiles.length === 0) {
+          setFormError(t('themeImportError'));
+          return;
+        }
+
+        const mergedThemes = [...savedThemes, ...newProfiles];
+        setSavedThemes(mergedThemes);
+        saveStoredThemes(mergedThemes);
+
+        const activeProfile = newProfiles[0];
+        setSelectedPreset(`profile:${activeProfile.id}`);
+        updateConfig({
+          ...activeProfile.colors,
+          ...(activeProfile.fontFamily ? { fontFamily: activeProfile.fontFamily } : {}),
+          ...(activeProfile.notificationAnimation ? { notificationAnimation: activeProfile.notificationAnimation } : {})
+        });
+
+        const successMsg = newProfiles.length === 1
+          ? `✓ ${t('themeImportedSuccess')} (${activeProfile.name})`
+          : `✓ ${t('themeImportedSuccess')} (${newProfiles.length} ${t('savedThemeProfiles')})`;
+
+        setThemeActionFeedback(successMsg);
+        setTimeout(() => setThemeActionFeedback(null), 3500);
+
+      } catch (err) {
+        setFormError(t('themeImportError'));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleResetProgressBarColors = () => {
+    updateConfig({
+      progressBarColor: '',
+      progressBarBgColor: '',
+      progressBarTextColor: '',
+      progressBarBorderColor: '',
+      splitMilestoneColors: false,
+      milestoneProgressBarColor: '',
+      milestoneProgressBarBgColor: '',
+      milestoneProgressBarTextColor: '',
+      milestoneProgressBarBorderColor: '',
+    });
+  };
+
   const handleResetAdvancedColors = () => {
     updateConfig({
       headerColor: '',
@@ -2566,9 +3107,6 @@ const App = () => {
       dividerColor: '',
       highlightColor: '',
       donorNameColor: '',
-      progressBarColor: '',
-      progressBarBgColor: '',
-      progressBarTextColor: '',
       toastBgColor: '',
       toastBorderColor: '',
       toastNameColor: '',
@@ -2909,9 +3447,25 @@ const App = () => {
   const effHighlightColor = config.highlightColor || config.accentColor1;
   const effDonorNameColor = config.donorNameColor || config.highlightColor || config.accentColor1;
 
+  // === EFFECTIVE PROGRESS BAR COLORS (SPLIT FROM REST OF THEME) ===
   const effProgressBarColor = config.progressBarColor || config.accentColor1;
   const effProgressBarBgColor = config.progressBarBgColor || config.panelColor;
   const effProgressBarTextColor = config.progressBarTextColor || config.buttonTextColor;
+  const effProgressBarBorderColor = config.progressBarBorderColor || config.panelBorderColor;
+
+  const effMilestoneBarColor = (config.splitMilestoneColors && config.milestoneProgressBarColor)
+    ? config.milestoneProgressBarColor
+    : effProgressBarColor;
+  const effMilestoneBarBgColor = (config.splitMilestoneColors && config.milestoneProgressBarBgColor)
+    ? config.milestoneProgressBarBgColor
+    : effProgressBarBgColor;
+  const effMilestoneBarTextColor = (config.splitMilestoneColors && config.milestoneProgressBarTextColor)
+    ? config.milestoneProgressBarTextColor
+    : effProgressBarTextColor;
+  const effMilestoneBarBorderColor = (config.splitMilestoneColors && config.milestoneProgressBarBorderColor)
+    ? config.milestoneProgressBarBorderColor
+    : effProgressBarBorderColor;
+
   const effToastBgColor = config.toastBgColor || config.panelColor;
   const effToastBorderColor = config.toastBorderColor || config.accentColor1;
   const effToastNameColor = config.toastNameColor || config.accentColor1;
@@ -2936,8 +3490,10 @@ const App = () => {
     label: { fontSize: '1rem', color: config.textColor, textAlign: 'left' as const, opacity: 0.7, fontFamily: config.fontFamily },
     colorPickerContainer: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '5px' },
     colorInput: { WebkitAppearance: 'none' as const, MozAppearance: 'none' as const, appearance: 'none' as const, width: '50px', height: '50px', backgroundColor: 'transparent', border: `2px solid ${effInputBorderColor}`, cursor: 'pointer' },
-    // Overlay styles
-    progressBarContainer: { width: '100%', backgroundColor: effProgressBarBgColor, border: `4px solid ${config.panelBorderColor}`, padding: '10px', boxSizing: 'border-box' as const },
+    // Container for non-progress-bar overlays (Schedule, Sponsors, Text, Team)
+    overlayContainer: { width: '100%', backgroundColor: config.panelColor, border: `4px solid ${config.panelBorderColor}`, padding: '10px', boxSizing: 'border-box' as const },
+    // Overlay styles specifically for progress bars
+    progressBarContainer: { width: '100%', backgroundColor: effProgressBarBgColor, border: `4px solid ${effProgressBarBorderColor}`, padding: '10px', boxSizing: 'border-box' as const },
     progressBar: { height: '40px', backgroundColor: effProgressBarColor, width: `0%`, transition: 'width 0.5s ease-in-out', display: 'flex', alignItems: 'center', justifyContent: 'center' as const, overflow: 'hidden' },
     progressText: { color: effProgressBarTextColor, textShadow: `1px 1px ${hexToRgba(config.textColor, 0.5)}`, fontSize: '1.2rem', fontFamily: config.fontFamily },
     goalText: { color: effSecondaryTextColor, marginTop: '10px', fontFamily: config.fontFamily },
@@ -3182,6 +3738,9 @@ const App = () => {
                   effHighlightColor={effHighlightColor}
                   effDonorNameColor={effDonorNameColor}
                   effProgressBarColor={effProgressBarColor}
+                  effProgressBarBgColor={effProgressBarBgColor}
+                  effProgressBarTextColor={effProgressBarTextColor}
+                  effProgressBarBorderColor={effProgressBarBorderColor}
                   hexToRgba={hexToRgba}
                   lastFetchedAt={lastFetchedAt}
                   onManualSync={handleManualSync}
@@ -3479,6 +4038,16 @@ const App = () => {
                                     </div>
                                 </div>
                             )}
+
+                            <label style={{...styles.label, marginTop: '12px'}}>{t('milestoneCalculation')}</label>
+                            <select
+                                value={config.milestoneProgressMode || 'cumulative'}
+                                onChange={(e) => updateConfig({ milestoneProgressMode: e.target.value as 'cumulative' | 'relative' })}
+                                style={styles.input}
+                            >
+                                <option value="cumulative">{t('milestoneCumulative')}</option>
+                                <option value="relative">{t('milestoneStep')}</option>
+                            </select>
                             </CollapsibleSection>
                             
                             <CollapsibleSection title={t('twitchIntegration')} isInitiallyCollapsed={true} styles={styles}>
@@ -3687,6 +4256,14 @@ const App = () => {
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={() => handleExportThemeProfile()}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 12px', fontSize: '0.8rem', backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor }}
+                                            title={t('exportTheme')}
+                                        >
+                                            📤 {t('exportTheme')}
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={() => handleDeleteThemeProfile()}
                                             style={{ ...styles.button, margin: 0, padding: '8px 12px', fontSize: '0.8rem', backgroundColor: config.errorColor, color: '#ffffff' }}
                                             title={t('deleteTheme')}
@@ -3697,40 +4274,258 @@ const App = () => {
                                 )}
                             </div>
 
-                            {/* Save Theme to Storage */}
+                            {/* Theme Profile Management & Import / Export */}
                             <div style={{
                                 marginTop: '12px',
-                                padding: '12px',
-                                backgroundColor: hexToRgba(config.panelBorderColor, 0.12),
+                                padding: '14px',
+                                backgroundColor: hexToRgba(config.panelBorderColor, 0.1),
                                 border: `1px dashed ${config.panelBorderColor}`,
                                 display: 'flex',
-                                gap: '10px',
-                                alignItems: 'center',
-                                flexWrap: 'wrap'
+                                flexDirection: 'column',
+                                gap: '12px'
                             }}>
-                                <input
-                                    type="text"
-                                    value={newThemeNameInput}
-                                    onChange={e => setNewThemeNameInput(e.target.value)}
-                                    placeholder={t('themeProfileName')}
-                                    style={{ ...styles.input, flex: 2, minWidth: '180px', padding: '8px' }}
-                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveThemeProfile(); } }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleSaveThemeProfile}
-                                    style={{
-                                        ...styles.button,
-                                        margin: 0,
-                                        padding: '8px 14px',
-                                        fontSize: '0.85rem',
-                                        backgroundColor: effPrimaryButtonBgColor,
-                                        color: config.buttonTextColor,
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    + {t('saveAsNewThemeProfile')}
-                                </button>
+                                {/* Save as new profile row */}
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '10px',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap'
+                                }}>
+                                    <input
+                                        type="text"
+                                        value={newThemeNameInput}
+                                        onChange={e => setNewThemeNameInput(e.target.value)}
+                                        placeholder={t('themeProfileName')}
+                                        style={{ ...styles.input, flex: 2, minWidth: '180px', padding: '8px' }}
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveThemeProfile(); } }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveThemeProfile}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '8px 14px',
+                                            fontSize: '0.85rem',
+                                            backgroundColor: effPrimaryButtonBgColor,
+                                            color: config.buttonTextColor,
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        + {t('saveAsNewThemeProfile')}
+                                    </button>
+                                </div>
+
+                                {/* Import / Export Theme Buttons */}
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    paddingTop: '10px',
+                                    borderTop: `1px solid ${hexToRgba(config.panelBorderColor, 0.25)}`
+                                }}>
+                                    <input
+                                        type="file"
+                                        ref={themeFileInputRef}
+                                        accept=".json,application/json"
+                                        onChange={handleImportThemeProfile}
+                                        style={{ display: 'none' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => themeFileInputRef.current?.click()}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '8px 14px',
+                                            fontSize: '0.85rem',
+                                            backgroundColor: effSecondaryButtonBgColor,
+                                            color: config.buttonTextColor,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                        title={t('importThemeHelp')}
+                                    >
+                                        📥 {t('importTheme')}
+                                    </button>
+
+                                    {selectedPreset.startsWith('profile:') ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExportThemeProfile()}
+                                            style={{
+                                                ...styles.button,
+                                                margin: 0,
+                                                padding: '8px 14px',
+                                                fontSize: '0.85rem',
+                                                backgroundColor: effPrimaryButtonBgColor,
+                                                color: config.buttonTextColor,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title={t('exportThemeHelp')}
+                                        >
+                                            📤 {t('exportTheme')}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExportThemeProfile()}
+                                            style={{
+                                                ...styles.button,
+                                                margin: 0,
+                                                padding: '8px 14px',
+                                                fontSize: '0.85rem',
+                                                backgroundColor: hexToRgba(effPrimaryButtonBgColor, 0.85),
+                                                color: config.buttonTextColor,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title={t('exportCurrentTheme')}
+                                        >
+                                            📤 {t('exportCurrentTheme')}
+                                        </button>
+                                    )}
+
+                                    {savedThemes.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleExportAllThemes}
+                                            style={{
+                                                ...styles.button,
+                                                margin: 0,
+                                                padding: '8px 14px',
+                                                fontSize: '0.85rem',
+                                                backgroundColor: 'transparent',
+                                                border: `1px solid ${config.panelBorderColor}`,
+                                                color: config.textColor,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            title={t('exportAllThemes')}
+                                        >
+                                            📦 {t('exportAllThemes')} ({savedThemes.length})
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* List of Saved Themes for Quick Selection and Export */}
+                                {savedThemes.length > 0 && (
+                                    <div style={{
+                                        marginTop: '4px',
+                                        paddingTop: '10px',
+                                        borderTop: `1px solid ${hexToRgba(config.panelBorderColor, 0.25)}`,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                    }}>
+                                        <div style={{ fontSize: '0.78rem', color: effSecondaryTextColor, fontWeight: 'bold', textAlign: 'left' as const }}>
+                                            {t('savedThemeProfiles')} ({savedThemes.length}):
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                                            {savedThemes.map(theme => {
+                                                const isActive = selectedPreset === `profile:${theme.id}`;
+                                                return (
+                                                    <div
+                                                        key={theme.id}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            gap: '8px',
+                                                            padding: '6px 10px',
+                                                            backgroundColor: isActive ? hexToRgba(effHighlightColor, 0.15) : hexToRgba(config.panelColor, 0.6),
+                                                            border: isActive ? `1px solid ${effHighlightColor}` : `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+                                                            borderRadius: '3px'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                                            <div style={{
+                                                                width: '14px',
+                                                                height: '14px',
+                                                                borderRadius: '2px',
+                                                                backgroundColor: theme.colors.backgroundColor,
+                                                                border: `1px solid ${theme.colors.panelBorderColor || '#fff'}`,
+                                                                flexShrink: 0
+                                                            }} />
+                                                            <span style={{
+                                                                fontSize: '0.85rem',
+                                                                color: isActive ? effHighlightColor : config.textColor,
+                                                                fontWeight: isActive ? 'bold' : 'normal',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {theme.name} {isActive && '(Active)'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                                            {!isActive && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleLoadSavedTheme(theme)}
+                                                                    style={{
+                                                                        ...styles.button,
+                                                                        margin: 0,
+                                                                        padding: '3px 8px',
+                                                                        fontSize: '0.72rem',
+                                                                        backgroundColor: effSecondaryButtonBgColor,
+                                                                        color: config.buttonTextColor
+                                                                    }}
+                                                                    title={t('loadTheme')}
+                                                                >
+                                                                    {t('loadTheme')}
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleExportThemeProfile(theme)}
+                                                                style={{
+                                                                    ...styles.button,
+                                                                    margin: 0,
+                                                                    padding: '3px 8px',
+                                                                    fontSize: '0.72rem',
+                                                                    backgroundColor: 'transparent',
+                                                                    border: `1px solid ${config.panelBorderColor}`,
+                                                                    color: config.textColor
+                                                                }}
+                                                                title={t('exportTheme')}
+                                                            >
+                                                                📤 {t('exportTheme')}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteThemeProfile(theme.id)}
+                                                                style={{
+                                                                    ...styles.button,
+                                                                    margin: 0,
+                                                                    padding: '3px 8px',
+                                                                    fontSize: '0.72rem',
+                                                                    backgroundColor: hexToRgba(config.errorColor, 0.2),
+                                                                    border: `1px solid ${config.errorColor}`,
+                                                                    color: config.errorColor
+                                                                }}
+                                                                title={t('deleteTheme')}
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             {themeActionFeedback && (
                                 <div style={{ color: config.successColor, fontSize: '0.85rem', marginTop: '6px', textAlign: 'center' }}>
@@ -3740,163 +4535,371 @@ const App = () => {
 
                             <div style={{borderTop: `1px solid ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
                             
-                            {/* Core Color Palette */}
-                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('background')}</label><input type="color" value={config.backgroundColor} onChange={e => updateConfig({ backgroundColor: e.target.value })} style={styles.colorInput} /></div>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('panel')}</label><input type="color" value={config.panelColor} onChange={e => updateConfig({ panelColor: e.target.value })} style={styles.colorInput} /></div>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('text')}</label><input type="color" value={config.textColor} onChange={e => updateConfig({ textColor: e.target.value })} style={styles.colorInput} /></div>
-                            </div>
+                            {/* SECTION 1: PROGRESSION BARS COLORS (SPLIT FROM THE REST) */}
+                            <div style={{
+                                marginTop: '15px',
+                                padding: '16px',
+                                border: `2px solid ${effProgressBarColor}`,
+                                backgroundColor: hexToRgba(effProgressBarBgColor, 0.4),
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '14px',
+                                boxSizing: 'border-box' as const
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: `1px solid ${hexToRgba(effProgressBarBorderColor, 0.4)}`, paddingBottom: '8px' }}>
+                                    <div style={{ textAlign: 'left' as const }}>
+                                        <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: effProgressBarColor, fontFamily: config.fontFamily }}>
+                                            📊 {t('progressBarSection')}
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: effSecondaryTextColor, opacity: 0.9, marginTop: '2px', fontFamily: config.fontFamily }}>
+                                            {t('progressBarSectionHelp')}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleResetProgressBarColors}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '6px 12px',
+                                            fontSize: '0.75rem',
+                                            backgroundColor: 'transparent',
+                                            border: `1px solid ${effProgressBarBorderColor}`,
+                                            color: config.textColor,
+                                            opacity: 0.85,
+                                            cursor: 'pointer'
+                                        }}
+                                        title={t('resetProgressBarColors')}
+                                    >
+                                        ↺ {t('resetProgressBarColors')}
+                                    </button>
+                                </div>
 
-                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center', marginTop: '1rem'}}>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('accent1')}</label><input type="color" value={config.accentColor1} onChange={e => updateConfig({ accentColor1: e.target.value })} style={styles.colorInput} /></div>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('accent2')}</label><input type="color" value={config.accentColor2} onChange={e => updateConfig({ accentColor2: e.target.value })} style={styles.colorInput} /></div>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('border')}</label><input type="color" value={config.panelBorderColor} onChange={e => updateConfig({ panelBorderColor: e.target.value })} style={styles.colorInput} /></div>
-                            </div>
+                                {/* Main Goal Progress Bar Colors */}
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', color: effSecondaryTextColor, marginBottom: '8px', fontWeight: 'bold', fontFamily: config.fontFamily, textAlign: 'left' as const }}>
+                                        🎯 {t('mainProgressBarTitle')}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center' }}>
+                                        <div style={styles.colorPickerContainer}>
+                                            <label style={styles.label}>{t('progressBarColor')}</label>
+                                            <input type="color" value={config.progressBarColor || config.accentColor1} onChange={e => updateConfig({ progressBarColor: e.target.value })} style={styles.colorInput} />
+                                        </div>
+                                        <div style={styles.colorPickerContainer}>
+                                            <label style={styles.label}>{t('progressBarBgColor')}</label>
+                                            <input type="color" value={config.progressBarBgColor || config.panelColor} onChange={e => updateConfig({ progressBarBgColor: e.target.value })} style={styles.colorInput} />
+                                        </div>
+                                        <div style={styles.colorPickerContainer}>
+                                            <label style={styles.label}>{t('progressBarTextColor')}</label>
+                                            <input type="color" value={config.progressBarTextColor || config.buttonTextColor} onChange={e => updateConfig({ progressBarTextColor: e.target.value })} style={styles.colorInput} />
+                                        </div>
+                                        <div style={styles.colorPickerContainer}>
+                                            <label style={styles.label}>{t('progressBarBorderColor')}</label>
+                                            <input type="color" value={config.progressBarBorderColor || config.panelBorderColor} onChange={e => updateConfig({ progressBarBorderColor: e.target.value })} style={styles.colorInput} />
+                                        </div>
+                                    </div>
+                                </div>
 
-                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center', marginTop: '1rem'}}>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('success')}</label><input type="color" value={config.successColor} onChange={e => updateConfig({ successColor: e.target.value })} style={styles.colorInput} /></div>
-                                <div style={styles.colorPickerContainer}><label style={styles.label}>{t('error')}</label><input type="color" value={config.errorColor} onChange={e => updateConfig({ errorColor: e.target.value })} style={styles.colorInput} /></div>
-                            </div>
-
-                            {/* Detailed / Granular Color Controls Toggle in Advanced Mode */}
-                            {config.themingMode === 'advanced' && (
-                                <>
-                                    <div style={{borderTop: `1px dashed ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAdvancedColors(!showAdvancedColors)}
-                                            style={{
-                                                ...styles.button,
-                                                margin: 0,
-                                                padding: '8px 12px',
-                                                fontSize: '0.85rem',
-                                                backgroundColor: 'transparent',
-                                                border: `2px solid ${effSecondaryButtonBgColor}`,
-                                                color: effSecondaryButtonBgColor,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {showAdvancedColors ? '▼ ' : '► '} {t('advancedColorControls')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleResetAdvancedColors}
-                                            style={{
-                                                ...styles.button,
-                                                margin: 0,
-                                                padding: '8px 12px',
-                                                fontSize: '0.8rem',
-                                                backgroundColor: 'transparent',
-                                                border: `1px solid ${config.panelBorderColor}`,
-                                                color: config.textColor,
-                                                opacity: 0.8
-                                            }}
-                                            title={t('resetAdvancedColors')}
-                                        >
-                                            ↺ {t('resetAdvancedColors')}
-                                        </button>
+                                {/* Split Milestone Colors Toggle & Controls */}
+                                <div style={{ borderTop: `1px dashed ${hexToRgba(effProgressBarBorderColor, 0.35)}`, paddingTop: '12px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="splitMilestoneColorsToggle"
+                                            checked={config.splitMilestoneColors || false}
+                                            onChange={e => updateConfig({ splitMilestoneColors: e.target.checked })}
+                                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: effProgressBarColor }}
+                                        />
+                                        <label htmlFor="splitMilestoneColorsToggle" style={{ ...styles.label, cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', opacity: 1, margin: 0 }}>
+                                            {t('splitMilestoneColors')}
+                                        </label>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: effSecondaryTextColor, opacity: 0.85, textAlign: 'left' as const, marginBottom: '10px', marginLeft: '26px', fontFamily: config.fontFamily }}>
+                                        {t('splitMilestoneColorsHelp')}
                                     </div>
 
-                                    {showAdvancedColors && (
+                                    {config.splitMilestoneColors && (
                                         <div style={{
-                                            marginTop: '12px',
-                                            padding: '15px',
-                                            border: `1px solid ${config.panelBorderColor}`,
-                                            backgroundColor: hexToRgba(config.panelColor, 0.5),
+                                            padding: '12px',
+                                            backgroundColor: hexToRgba(config.panelColor, 0.6),
+                                            border: `1px solid ${effMilestoneBarBorderColor}`,
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            gap: '15px'
+                                            gap: '10px'
                                         }}>
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('headerColor')}</label>
-                                                    <input type="color" value={config.headerColor || config.accentColor1} onChange={e => updateConfig({ headerColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('secondaryTextColor')}</label>
-                                                    <input type="color" value={config.secondaryTextColor || config.accentColor2} onChange={e => updateConfig({ secondaryTextColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('buttonTextColor')}</label>
-                                                    <input type="color" value={config.buttonTextColor || '#0d0d0d'} onChange={e => updateConfig({ buttonTextColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
+                                            <div style={{ fontSize: '0.85rem', color: effSecondaryTextColor, fontWeight: 'bold', fontFamily: config.fontFamily, textAlign: 'left' as const }}>
+                                                🚩 {t('milestoneProgressBarTitle')}
                                             </div>
-
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center' }}>
                                                 <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('primaryButtonBgColor')}</label>
-                                                    <input type="color" value={config.primaryButtonBgColor || config.accentColor1} onChange={e => updateConfig({ primaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                    <label style={styles.label}>{t('milestoneBarColor')}</label>
+                                                    <input type="color" value={config.milestoneProgressBarColor || effProgressBarColor} onChange={e => updateConfig({ milestoneProgressBarColor: e.target.value })} style={styles.colorInput} />
                                                 </div>
                                                 <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('secondaryButtonBgColor')}</label>
-                                                    <input type="color" value={config.secondaryButtonBgColor || config.accentColor2} onChange={e => updateConfig({ secondaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                    <label style={styles.label}>{t('milestoneBarBgColor')}</label>
+                                                    <input type="color" value={config.milestoneProgressBarBgColor || effProgressBarBgColor} onChange={e => updateConfig({ milestoneProgressBarBgColor: e.target.value })} style={styles.colorInput} />
                                                 </div>
                                                 <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('dividerColor')}</label>
-                                                    <input type="color" value={config.dividerColor || config.accentColor2} onChange={e => updateConfig({ dividerColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                            </div>
-
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('highlightColor')}</label>
-                                                    <input type="color" value={config.highlightColor || config.accentColor1} onChange={e => updateConfig({ highlightColor: e.target.value })} style={styles.colorInput} />
+                                                    <label style={styles.label}>{t('milestoneBarTextColor')}</label>
+                                                    <input type="color" value={config.milestoneProgressBarTextColor || effProgressBarTextColor} onChange={e => updateConfig({ milestoneProgressBarTextColor: e.target.value })} style={styles.colorInput} />
                                                 </div>
                                                 <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('donorNameColor')}</label>
-                                                    <input type="color" value={config.donorNameColor || config.highlightColor || config.accentColor1} onChange={e => updateConfig({ donorNameColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                            </div>
-
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('progressBarColor')}</label>
-                                                    <input type="color" value={config.progressBarColor || config.accentColor1} onChange={e => updateConfig({ progressBarColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('progressBarBgColor')}</label>
-                                                    <input type="color" value={config.progressBarBgColor || config.panelColor} onChange={e => updateConfig({ progressBarBgColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('progressBarTextColor')}</label>
-                                                    <input type="color" value={config.progressBarTextColor || config.buttonTextColor} onChange={e => updateConfig({ progressBarTextColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                            </div>
-
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('toastBgColor')}</label>
-                                                    <input type="color" value={config.toastBgColor || config.panelColor} onChange={e => updateConfig({ toastBgColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('toastBorderColor')}</label>
-                                                    <input type="color" value={config.toastBorderColor || config.accentColor1} onChange={e => updateConfig({ toastBorderColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('toastNameColor')}</label>
-                                                    <input type="color" value={config.toastNameColor || config.accentColor1} onChange={e => updateConfig({ toastNameColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('toastAmountColor')}</label>
-                                                    <input type="color" value={config.toastAmountColor || config.accentColor2} onChange={e => updateConfig({ toastAmountColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                            </div>
-
-                                            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('inputBgColor')}</label>
-                                                    <input type="color" value={config.inputBgColor || config.panelColor} onChange={e => updateConfig({ inputBgColor: e.target.value })} style={styles.colorInput} />
-                                                </div>
-                                                <div style={styles.colorPickerContainer}>
-                                                    <label style={styles.label}>{t('inputBorderColor')}</label>
-                                                    <input type="color" value={config.inputBorderColor || config.accentColor2} onChange={e => updateConfig({ inputBorderColor: e.target.value })} style={styles.colorInput} />
+                                                    <label style={styles.label}>{t('milestoneBarBorderColor')}</label>
+                                                    <input type="color" value={config.milestoneProgressBarBorderColor || effProgressBarBorderColor} onChange={e => updateConfig({ milestoneProgressBarBorderColor: e.target.value })} style={styles.colorInput} />
                                                 </div>
                                             </div>
                                         </div>
                                     )}
-                                </>
-                            )}
+                                </div>
+
+                                {/* Live Mini Preview of Progression Bars inside this section */}
+                                <div style={{
+                                    marginTop: '6px',
+                                    padding: '10px',
+                                    backgroundColor: config.backgroundColor,
+                                    border: `1px solid ${effProgressBarBorderColor}`,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px'
+                                }}>
+                                    <div style={{ fontSize: '0.72rem', color: effSecondaryTextColor, textAlign: 'left' as const, fontFamily: config.fontFamily }}>
+                                        {t('livePreview')} - {t('mainProgressBarTitle')}
+                                    </div>
+                                    <div style={{
+                                        position: 'relative',
+                                        width: '100%',
+                                        height: '32px',
+                                        backgroundColor: effProgressBarBgColor,
+                                        border: `2px solid ${effProgressBarBorderColor}`,
+                                        overflow: 'hidden',
+                                        boxSizing: 'border-box' as const
+                                    }}>
+                                        <div style={{
+                                            width: '65%',
+                                            height: '100%',
+                                            backgroundColor: effProgressBarColor,
+                                            transition: 'width 0.3s ease'
+                                        }} />
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: effProgressBarTextColor,
+                                            fontFamily: config.fontFamily,
+                                            fontSize: '0.8rem',
+                                            fontWeight: 'bold',
+                                            pointerEvents: 'none'
+                                        }}>
+                                            $1,300.00 / $2,000.00 (65.0%)
+                                        </div>
+                                    </div>
+
+                                    {config.splitMilestoneColors && (
+                                        <>
+                                            <div style={{ fontSize: '0.72rem', color: effSecondaryTextColor, textAlign: 'left' as const, fontFamily: config.fontFamily, marginTop: '4px' }}>
+                                                {t('livePreview')} - {t('milestoneProgressBarTitle')}
+                                            </div>
+                                            <div style={{
+                                                position: 'relative',
+                                                width: '100%',
+                                                height: '32px',
+                                                backgroundColor: effMilestoneBarBgColor,
+                                                border: `2px solid ${effMilestoneBarBorderColor}`,
+                                                overflow: 'hidden',
+                                                boxSizing: 'border-box' as const
+                                            }}>
+                                                <div style={{
+                                                    width: '40%',
+                                                    height: '100%',
+                                                    backgroundColor: effMilestoneBarColor,
+                                                    transition: 'width 0.3s ease'
+                                                }} />
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: effMilestoneBarTextColor,
+                                                    fontFamily: config.fontFamily,
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 'bold',
+                                                    pointerEvents: 'none'
+                                                }}>
+                                                    $200.00 / $500.00 (40.0%)
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* SECTION 2: GENERAL THEME & COMPONENT COLORS ("THE REST") */}
+                            <div style={{
+                                marginTop: '20px',
+                                padding: '16px',
+                                border: `1px solid ${config.panelBorderColor}`,
+                                backgroundColor: hexToRgba(config.panelColor, 0.4),
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '12px',
+                                boxSizing: 'border-box' as const
+                            }}>
+                                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: effHeaderColor, fontFamily: config.fontFamily, textAlign: 'left' as const, borderBottom: `1px solid ${config.panelBorderColor}`, paddingBottom: '6px' }}>
+                                    🎨 {t('generalColorsSection')}
+                                </div>
+                                
+                                {/* Core Color Palette */}
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('background')}</label><input type="color" value={config.backgroundColor} onChange={e => updateConfig({ backgroundColor: e.target.value })} style={styles.colorInput} /></div>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('panel')}</label><input type="color" value={config.panelColor} onChange={e => updateConfig({ panelColor: e.target.value })} style={styles.colorInput} /></div>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('text')}</label><input type="color" value={config.textColor} onChange={e => updateConfig({ textColor: e.target.value })} style={styles.colorInput} /></div>
+                                </div>
+
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('accent1')}</label><input type="color" value={config.accentColor1} onChange={e => updateConfig({ accentColor1: e.target.value })} style={styles.colorInput} /></div>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('accent2')}</label><input type="color" value={config.accentColor2} onChange={e => updateConfig({ accentColor2: e.target.value })} style={styles.colorInput} /></div>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('border')}</label><input type="color" value={config.panelBorderColor} onChange={e => updateConfig({ panelBorderColor: e.target.value })} style={styles.colorInput} /></div>
+                                </div>
+
+                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('success')}</label><input type="color" value={config.successColor} onChange={e => updateConfig({ successColor: e.target.value })} style={styles.colorInput} /></div>
+                                    <div style={styles.colorPickerContainer}><label style={styles.label}>{t('error')}</label><input type="color" value={config.errorColor} onChange={e => updateConfig({ errorColor: e.target.value })} style={styles.colorInput} /></div>
+                                </div>
+
+                                {/* Detailed / Granular Color Controls Toggle in Advanced Mode */}
+                                {config.themingMode === 'advanced' && (
+                                    <>
+                                        <div style={{borderTop: `1px dashed ${config.panelBorderColor}`, margin: '10px 0'}} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAdvancedColors(!showAdvancedColors)}
+                                                style={{
+                                                    ...styles.button,
+                                                    margin: 0,
+                                                    padding: '8px 12px',
+                                                    fontSize: '0.85rem',
+                                                    backgroundColor: 'transparent',
+                                                    border: `2px solid ${effSecondaryButtonBgColor}`,
+                                                    color: effSecondaryButtonBgColor,
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                {showAdvancedColors ? '▼ ' : '► '} {t('advancedColorControls')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleResetAdvancedColors}
+                                                style={{
+                                                    ...styles.button,
+                                                    margin: 0,
+                                                    padding: '8px 12px',
+                                                    fontSize: '0.8rem',
+                                                    backgroundColor: 'transparent',
+                                                    border: `1px solid ${config.panelBorderColor}`,
+                                                    color: config.textColor,
+                                                    opacity: 0.8
+                                                }}
+                                                title={t('resetAdvancedColors')}
+                                            >
+                                                ↺ {t('resetAdvancedColors')}
+                                            </button>
+                                        </div>
+
+                                        {showAdvancedColors && (
+                                            <div style={{
+                                                marginTop: '12px',
+                                                padding: '15px',
+                                                border: `1px solid ${config.panelBorderColor}`,
+                                                backgroundColor: hexToRgba(config.panelColor, 0.5),
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '15px'
+                                            }}>
+                                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('headerColor')}</label>
+                                                        <input type="color" value={config.headerColor || config.accentColor1} onChange={e => updateConfig({ headerColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('secondaryTextColor')}</label>
+                                                        <input type="color" value={config.secondaryTextColor || config.accentColor2} onChange={e => updateConfig({ secondaryTextColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('buttonTextColor')}</label>
+                                                        <input type="color" value={config.buttonTextColor || '#0d0d0d'} onChange={e => updateConfig({ buttonTextColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('primaryButtonBgColor')}</label>
+                                                        <input type="color" value={config.primaryButtonBgColor || config.accentColor1} onChange={e => updateConfig({ primaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('secondaryButtonBgColor')}</label>
+                                                        <input type="color" value={config.secondaryButtonBgColor || config.accentColor2} onChange={e => updateConfig({ secondaryButtonBgColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('dividerColor')}</label>
+                                                        <input type="color" value={config.dividerColor || config.accentColor2} onChange={e => updateConfig({ dividerColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('highlightColor')}</label>
+                                                        <input type="color" value={config.highlightColor || config.accentColor1} onChange={e => updateConfig({ highlightColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('donorNameColor')}</label>
+                                                        <input type="color" value={config.donorNameColor || config.highlightColor || config.accentColor1} onChange={e => updateConfig({ donorNameColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('toastBgColor')}</label>
+                                                        <input type="color" value={config.toastBgColor || config.panelColor} onChange={e => updateConfig({ toastBgColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('toastBorderColor')}</label>
+                                                        <input type="color" value={config.toastBorderColor || config.accentColor1} onChange={e => updateConfig({ toastBorderColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('toastNameColor')}</label>
+                                                        <input type="color" value={config.toastNameColor || config.accentColor1} onChange={e => updateConfig({ toastNameColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('toastAmountColor')}</label>
+                                                        <input type="color" value={config.toastAmountColor || config.accentColor2} onChange={e => updateConfig({ toastAmountColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', justifyContent: 'center'}}>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('inputBgColor')}</label>
+                                                        <input type="color" value={config.inputBgColor || config.panelColor} onChange={e => updateConfig({ inputBgColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                    <div style={styles.colorPickerContainer}>
+                                                        <label style={styles.label}>{t('inputBorderColor')}</label>
+                                                        <input type="color" value={config.inputBorderColor || config.accentColor2} onChange={e => updateConfig({ inputBorderColor: e.target.value })} style={styles.colorInput} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
 
                             {/* Live Theme Preview Box */}
                             <div style={{borderTop: `1px solid ${config.panelBorderColor}`, margin: '20px 0 10px 0'}} />
@@ -3921,26 +4924,84 @@ const App = () => {
                                     <div style={{
                                         width: '100%',
                                         backgroundColor: effProgressBarBgColor,
-                                        border: `3px solid ${config.panelBorderColor}`,
+                                        border: `3px solid ${effProgressBarBorderColor}`,
                                         padding: '4px',
                                         boxSizing: 'border-box'
                                     }}>
                                         <div style={{
-                                            width: '62%',
+                                            position: 'relative',
+                                            width: '100%',
                                             height: '24px',
-                                            backgroundColor: effProgressBarColor,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: effProgressBarTextColor,
-                                            fontSize: '0.75rem',
-                                            fontFamily: config.fontFamily,
-                                            whiteSpace: 'nowrap',
+                                            backgroundColor: effProgressBarBgColor,
                                             overflow: 'hidden'
                                         }}>
-                                            $1,250.00 (62%)
+                                            <div style={{
+                                                width: '62%',
+                                                height: '100%',
+                                                backgroundColor: effProgressBarColor,
+                                            }} />
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: effProgressBarTextColor,
+                                                fontSize: '0.75rem',
+                                                fontFamily: config.fontFamily,
+                                                whiteSpace: 'nowrap',
+                                                fontWeight: 'bold',
+                                                pointerEvents: 'none'
+                                            }}>
+                                                $1,250.00 (62%)
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {config.splitMilestoneColors && (
+                                        <div style={{
+                                            width: '100%',
+                                            backgroundColor: effMilestoneBarBgColor,
+                                            border: `3px solid ${effMilestoneBarBorderColor}`,
+                                            padding: '4px',
+                                            boxSizing: 'border-box'
+                                        }}>
+                                            <div style={{
+                                                position: 'relative',
+                                                width: '100%',
+                                                height: '22px',
+                                                backgroundColor: effMilestoneBarBgColor,
+                                                overflow: 'hidden'
+                                            }}>
+                                                <div style={{
+                                                    width: '45%',
+                                                    height: '100%',
+                                                    backgroundColor: effMilestoneBarColor,
+                                                }} />
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: effMilestoneBarTextColor,
+                                                    fontSize: '0.7rem',
+                                                    fontFamily: config.fontFamily,
+                                                    whiteSpace: 'nowrap',
+                                                    fontWeight: 'bold',
+                                                    pointerEvents: 'none'
+                                                }}>
+                                                    Milestone: $450.00 (45%)
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Preview Toast Alert */}
                                     <div style={{
@@ -4309,7 +5370,24 @@ const App = () => {
                 </div>
             )}
             
-            {overlayType === 'milestone' && <NextMilestoneOverlay milestones={milestones} totalRaised={totalRaised} currencyPrefix={currencyPrefix} convertAmount={convertAmount} styles={styles} successColor={config.successColor} t={t} />}
+            {overlayType === 'milestone' && (
+              <NextMilestoneOverlay
+                milestones={milestones}
+                totalRaised={totalRaised}
+                currencyPrefix={currencyPrefix}
+                convertAmount={convertAmount}
+                styles={styles}
+                config={config}
+                successColor={config.successColor}
+                effProgressBarColor={effMilestoneBarColor}
+                effProgressBarBgColor={effMilestoneBarBgColor}
+                effProgressBarTextColor={effMilestoneBarTextColor}
+                effProgressBarBorderColor={effMilestoneBarBorderColor}
+                effSecondaryTextColor={effSecondaryTextColor}
+                hexToRgba={hexToRgba}
+                t={t}
+              />
+            )}
             {overlayType === 'team' && <TeamOverlay styles={styles} currencyPrefix={currencyPrefix} convertAmount={convertAmount} teamTotalRaised={teamTotalRaised} successColor={config.successColor} backgroundColor={config.backgroundColor} hexToRgba={hexToRgba} teamName={teamName} t={t} />}
             {overlayType === 'team-dashboard' && (
               <TeamDashboardView
@@ -4339,6 +5417,9 @@ const App = () => {
                 effHighlightColor={effHighlightColor}
                 effDonorNameColor={effDonorNameColor}
                 effProgressBarColor={effProgressBarColor}
+                effProgressBarBgColor={effProgressBarBgColor}
+                effProgressBarTextColor={effProgressBarTextColor}
+                effProgressBarBorderColor={effProgressBarBorderColor}
                 hexToRgba={hexToRgba}
                 lastFetchedAt={lastFetchedAt}
                 onManualSync={handleManualSync}
