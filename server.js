@@ -309,6 +309,18 @@ const DEFAULT_CONFIG = {
     selectedTextFile: '',
     textOverlayAlignment: 'top-left',
     textOverlayFontSize: 1.5,
+
+    // QR Code Generator Settings
+    qrLinkType: 'donation', // 'page' | 'donation' | 'custom'
+    qrCustomUrl: '',
+    qrTitle: 'SCAN TO DONATE',
+    qrSubtitle: '',
+    qrFgColor: '#000000',
+    qrBgColor: '#ffffff',
+    qrTransparentBg: false,
+    qrSize: 240,
+    qrErrorCorrection: 'M',
+    qrShowCardInDashboard: true,
 };
 
 class Profile {

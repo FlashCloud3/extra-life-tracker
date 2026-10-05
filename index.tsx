@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { io, Socket } from 'socket.io-client';
 import tmi from 'tmi.js';
 import { translations } from './translations.js';
+import { createQRMatrix, createQRSvgString, getExtraLifeUrl } from './qr-code.js';
 
 // === COLOR PRESETS ===
 const COLOR_PRESETS = {
@@ -1382,6 +1383,235 @@ const CelebrationOverlay = ({ playSound, accentColor1, accentColor2, primaryColo
     );
 };
 
+// === QR CODE COMPONENTS & HELPERS ===
+
+const downloadQRCodePng = (
+  url: string,
+  filename: string,
+  targetSize = 1024,
+  fgColor = '#000000',
+  bgColor = '#ffffff',
+  errorCorrectionLevel = 'M'
+) => {
+  try {
+    const matrix = createQRMatrix(url || 'https://dd.extra-life.org', errorCorrectionLevel as any);
+    const canvas = document.createElement('canvas');
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const margin = 2;
+    const fullSize = matrix.length + margin * 2;
+    const cell = targetSize / fullSize;
+    if (bgColor && bgColor !== 'transparent') {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, targetSize, targetSize);
+    } else {
+      ctx.clearRect(0, 0, targetSize, targetSize);
+    }
+    ctx.fillStyle = fgColor || '#000000';
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix.length; c++) {
+        if (matrix[r][c]) {
+          ctx.fillRect((c + margin) * cell, (r + margin) * cell, cell + 0.1, cell + 0.1);
+        }
+      }
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename || 'extralife-donation-qr.png';
+    a.click();
+  } catch (e) {
+    console.error('Download QR PNG failed:', e);
+  }
+};
+
+const downloadQRCodeSvg = (
+  url: string,
+  filename: string,
+  fgColor = '#000000',
+  bgColor = '#ffffff',
+  errorCorrectionLevel = 'M'
+) => {
+  try {
+    const svgStr = createQRSvgString({
+      text: url,
+      size: 512,
+      margin: 2,
+      fgColor: fgColor || '#000000',
+      bgColor: bgColor || '#ffffff',
+      errorCorrectionLevel: errorCorrectionLevel as any
+    });
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'extralife-donation-qr.svg';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (e) {
+    console.error('Download QR SVG failed:', e);
+  }
+};
+
+const QRCodeSvg = ({
+  url,
+  size = 200,
+  fgColor = '#000000',
+  bgColor = '#ffffff',
+  margin = 2,
+  errorCorrectionLevel = 'M',
+  title = ''
+}: {
+  url: string;
+  size?: number;
+  fgColor?: string;
+  bgColor?: string;
+  margin?: number;
+  errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  title?: string;
+}) => {
+  const { pathD, moduleCount } = useMemo(() => {
+    try {
+      const matrix = createQRMatrix(url || 'https://dd.extra-life.org', errorCorrectionLevel);
+      const count = matrix.length;
+      const fullSize = count + margin * 2;
+      const cell = size / fullSize;
+      let d = '';
+      for (let r = 0; r < count; r++) {
+        for (let c = 0; c < count; c++) {
+          if (matrix[r][c]) {
+            const x = (c + margin) * cell;
+            const y = (r + margin) * cell;
+            d += `M${x.toFixed(2)},${y.toFixed(2)}h${cell.toFixed(2)}v${cell.toFixed(2)}h-${cell.toFixed(2)}z `;
+          }
+        }
+      }
+      return { pathD: d.trim(), moduleCount: count };
+    } catch (e) {
+      console.error('Error generating QR matrix:', e);
+      return { pathD: '', moduleCount: 0 };
+    }
+  }, [url, size, margin, errorCorrectionLevel]);
+
+  if (!pathD) {
+    return (
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: bgColor, color: fgColor, fontSize: '0.8rem', padding: '10px', textAlign: 'center' }}>
+        Invalid URL
+      </div>
+    );
+  }
+
+  const isTransparent = !bgColor || bgColor === 'transparent';
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+      shapeRendering="crispEdges"
+      role="img"
+      aria-label={title || `QR Code for ${url}`}
+    >
+      {!isTransparent && <rect width={size} height={size} fill={bgColor} />}
+      <path d={pathD} fill={fgColor} />
+    </svg>
+  );
+};
+
+const QRCodeOverlay = ({
+  url,
+  title,
+  subtitle,
+  fgColor,
+  bgColor,
+  isTransparent,
+  size,
+  fontFamily,
+  textColor,
+  accentColor1,
+  panelColor,
+  panelBorderColor,
+  t
+}: any) => {
+  return (
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      padding: '20px',
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        backgroundColor: isTransparent ? 'transparent' : panelColor,
+        border: isTransparent ? 'none' : `3px solid ${panelBorderColor || accentColor1}`,
+        borderRadius: '12px',
+        padding: '24px 28px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        gap: '14px',
+        boxShadow: isTransparent ? 'none' : '0 10px 30px rgba(0,0,0,0.6)',
+        maxWidth: '90%',
+        boxSizing: 'border-box' as const
+      }}>
+        {title && (
+          <h2 style={{
+            margin: 0,
+            color: accentColor1 || textColor,
+            fontFamily: fontFamily,
+            fontSize: '1.25rem',
+            textAlign: 'center' as const,
+            letterSpacing: '1px',
+            textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+          }}>
+            {title}
+          </h2>
+        )}
+        <div style={{
+          padding: '12px',
+          backgroundColor: isTransparent ? 'transparent' : (bgColor || '#ffffff'),
+          borderRadius: '8px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: isTransparent ? 'none' : '0 4px 12px rgba(0,0,0,0.25)'
+        }}>
+          <QRCodeSvg
+            url={url}
+            size={size || 220}
+            fgColor={fgColor || '#000000'}
+            bgColor={isTransparent ? 'transparent' : (bgColor || '#ffffff')}
+            title={title || 'Extra Life Donation QR Code'}
+          />
+        </div>
+        {subtitle && (
+          <p style={{
+            margin: 0,
+            color: textColor,
+            fontFamily: fontFamily,
+            fontSize: '0.8rem',
+            opacity: 0.85,
+            textAlign: 'center' as const,
+            maxWidth: '260px',
+            lineHeight: 1.4
+          }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CollapsibleSection = ({ title, children, isInitiallyCollapsed = false, styles }: { title: string, children: React.ReactNode, isInitiallyCollapsed?: boolean, styles: any }) => {
     const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -1603,7 +1833,7 @@ const App = () => {
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
   // UI/Config State
-  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text'>('none');
+  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
   const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
@@ -1694,6 +1924,18 @@ const App = () => {
     customTextContent: '',
     textOverlayAlignment: 'top-left', // New option
     textOverlayFontSize: 1.5, // New option, defaults to 1.5rem
+
+    // QR Code Generator Settings
+    qrLinkType: 'donation' as 'page' | 'donation' | 'custom',
+    qrCustomUrl: '',
+    qrTitle: 'SCAN TO DONATE',
+    qrSubtitle: '',
+    qrFgColor: '#000000',
+    qrBgColor: '#ffffff',
+    qrTransparentBg: false,
+    qrSize: 220,
+    qrErrorCorrection: 'M' as 'L' | 'M' | 'Q' | 'H',
+    qrShowCardInDashboard: true,
   });
 
   // Local input state for form (debounced by user action essentially)
@@ -1901,6 +2143,15 @@ const App = () => {
     if (goal <= 0) return 0;
     return Math.min((totalRaised / goal) * 100, 100);
   }, [totalRaised, goal]);
+
+  // QR Code URL resolution based on selected link version ('page' | 'donation' | 'custom')
+  const activeParticipantId = useMemo(() => {
+    return String(config.participantId || participantIdInput || (currentProfile !== 'default' ? currentProfile : '566273')).trim() || '566273';
+  }, [config.participantId, participantIdInput, currentProfile]);
+
+  const effectiveQrUrl = useMemo(() => {
+    return getExtraLifeUrl(activeParticipantId, config.qrLinkType || 'donation', config.qrCustomUrl);
+  }, [activeParticipantId, config.qrLinkType, config.qrCustomUrl]);
 
   // === AUDIO LOGIC ===
   useEffect(() => {
@@ -2580,8 +2831,8 @@ const App = () => {
     const overlayParam = params.get('overlay');
     const rootEl = document.getElementById('root');
     
-    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text'].includes(overlayParam)) {
-        setOverlayType(overlayParam as any);
+    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text', 'qrcode', 'qr'].includes(overlayParam)) {
+        setOverlayType(overlayParam === 'qr' ? 'qrcode' : overlayParam as any);
         if (rootEl) rootEl.classList.remove('config-mode');
     } else {
         setOverlayType('none');
@@ -3130,6 +3381,15 @@ const App = () => {
         setCopyFeedback(type);
         setTimeout(() => setCopyFeedback(null), 2000);
     }).catch(err => {
+        setFormError(t('failedToCopyUrl'));
+    });
+  };
+
+  const handleCopyQrLink = () => {
+    navigator.clipboard.writeText(effectiveQrUrl).then(() => {
+        setCopyFeedback('qr-link');
+        setTimeout(() => setCopyFeedback(null), 2000);
+    }).catch(() => {
         setFormError(t('failedToCopyUrl'));
     });
   };
@@ -3821,6 +4081,86 @@ const App = () => {
                        <p style={{margin:0, color: effSecondaryTextColor, fontSize: '0.85rem', marginTop: '5px'}}>{t('lastDonator')}: {sortedDonations.length > 0 ? (sortedDonations[0].displayName === 'Anonymous' ? t('anonymous') : sortedDonations[0].displayName) : t('none')}</p>
                     </div>
 
+                    {/* QR Code Quick Scan & Share Card */}
+                    {config.qrShowCardInDashboard !== false && (
+                      <div style={{ ...styles.card, border: `2px solid ${effHighlightColor}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '8px' }}>
+                          <h3 style={{ margin: 0, color: effHeaderColor, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            📱 {t('qrCardTitle')}
+                          </h3>
+                          <span style={{ fontSize: '0.7rem', color: effHighlightColor, backgroundColor: hexToRgba(effHighlightColor, 0.15), padding: '2px 8px', borderRadius: '10px' }}>
+                            {config.qrLinkType === 'page' ? t('qrLinkPage') : t('qrLinkDonation')}
+                          </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginTop: '6px' }}>
+                          <div style={{
+                            padding: '10px',
+                            backgroundColor: config.qrTransparentBg ? hexToRgba(config.panelColor, 0.8) : (config.qrBgColor || '#ffffff'),
+                            border: `1px solid ${hexToRgba(config.panelBorderColor, 0.5)}`,
+                            borderRadius: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <QRCodeSvg
+                              url={effectiveQrUrl}
+                              size={140}
+                              fgColor={config.qrFgColor || '#000000'}
+                              bgColor={config.qrTransparentBg ? 'transparent' : (config.qrBgColor || '#ffffff')}
+                              errorCorrectionLevel={config.qrErrorCorrection || 'M'}
+                              title={t('qrCardTitle')}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: '1 1 200px' }}>
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: effSecondaryTextColor, lineHeight: 1.4 }}>
+                              {t('qrScanInstructions')}
+                            </p>
+
+                            <div style={{
+                              backgroundColor: hexToRgba(config.panelBorderColor, 0.15),
+                              padding: '6px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.7rem',
+                              fontFamily: 'monospace',
+                              color: config.textColor,
+                              wordBreak: 'break-all',
+                              maxHeight: '44px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {effectiveQrUrl}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyQrLink()}
+                                style={{ ...styles.button, margin: 0, padding: '6px 10px', fontSize: '0.75rem', backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, flex: 1 }}
+                              >
+                                📋 {copyFeedback === 'qr-link' ? t('copied') : t('copyLink')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openOverlay('qrcode', 'width=450,height=520')}
+                                style={{ ...styles.button, margin: 0, padding: '6px 10px', fontSize: '0.75rem', backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, flex: 1 }}
+                              >
+                                ↗ {t('openPopup')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadQRCodePng(effectiveQrUrl, `extralife-qr-${activeParticipantId}.png`, 1024, config.qrFgColor, config.qrBgColor, config.qrErrorCorrection)}
+                                style={{ ...styles.button, margin: 0, padding: '6px 10px', fontSize: '0.75rem', backgroundColor: hexToRgba(config.panelBorderColor, 0.2), border: `1px solid ${config.panelBorderColor}`, color: config.textColor, flex: 1 }}
+                              >
+                                💾 PNG
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Overlay Links (Collapsed) */}
                     <div style={styles.card}>
                         <CollapsibleSection title={t('overlayLinks')} isInitiallyCollapsed={true} styles={styles}>
@@ -3831,6 +4171,7 @@ const App = () => {
                                     { title: t('nextMilestone'), fn: () => openOverlay('milestone', 'width=800,height=180'), type: 'milestone' },
                                     { title: t('teamTracker'), fn: () => openOverlay('team', 'width=400,height=100'), type: 'team' },
                                     { title: t('teamDashboard'), fn: () => openOverlay('team-dashboard', 'width=1280,height=850'), type: 'team-dashboard' },
+                                    { title: t('qrCodeOverlayLink'), fn: () => openOverlay('qrcode', 'width=450,height=520'), type: 'qrcode' },
                                     { title: t('celebration'), fn: () => openOverlay('celebration', 'width=1920,height=1080'), type: 'celebration' },
                                     { title: t('schedule'), fn: () => openOverlay('schedule', 'width=600,height=400'), type: 'schedule' },
                                     { title: t('sponsorsOverlay'), fn: () => openOverlay('sponsors', 'width=300,height=150'), type: 'sponsors' },
@@ -4049,7 +4390,381 @@ const App = () => {
                                 <option value="relative">{t('milestoneStep')}</option>
                             </select>
                             </CollapsibleSection>
-                            
+
+                            <CollapsibleSection title={t('qrCodeSection')} isInitiallyCollapsed={false} styles={styles}>
+                                <p style={{ fontSize: '0.85rem', color: effSecondaryTextColor, margin: '0 0 15px 0', lineHeight: 1.5 }}>
+                                    {t('qrCodeSectionHelp')}
+                                </p>
+
+                                {/* Link destination choices */}
+                                <label style={{ ...styles.label, marginBottom: '8px' }}>{t('qrLinkVersion')}</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                    {/* Version 1: Participant Page */}
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '12px',
+                                        padding: '12px',
+                                        backgroundColor: config.qrLinkType === 'page' ? hexToRgba(effHighlightColor, 0.12) : hexToRgba(config.panelBorderColor, 0.1),
+                                        border: `2px solid ${config.qrLinkType === 'page' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.3)}`,
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}>
+                                        <input
+                                            type="radio"
+                                            name="qrLinkType"
+                                            value="page"
+                                            checked={config.qrLinkType === 'page'}
+                                            onChange={() => updateConfig({ qrLinkType: 'page' })}
+                                            style={{ marginTop: '3px' }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: config.textColor }}>
+                                                {t('qrLinkPage')}
+                                            </span>
+                                            <span style={{ fontSize: '0.78rem', color: effSecondaryTextColor }}>
+                                                {t('qrLinkPageDesc')}
+                                            </span>
+                                            <span style={{ fontSize: '0.72rem', color: effHighlightColor, fontFamily: 'monospace', marginTop: '2px', wordBreak: 'break-all' }}>
+                                                https://dd.extra-life.org/participants/{activeParticipantId}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    {/* Version 2: Direct Donation Page */}
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '12px',
+                                        padding: '12px',
+                                        backgroundColor: config.qrLinkType === 'donation' || !config.qrLinkType ? hexToRgba(effHighlightColor, 0.12) : hexToRgba(config.panelBorderColor, 0.1),
+                                        border: `2px solid ${config.qrLinkType === 'donation' || !config.qrLinkType ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.3)}`,
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}>
+                                        <input
+                                            type="radio"
+                                            name="qrLinkType"
+                                            value="donation"
+                                            checked={config.qrLinkType === 'donation' || !config.qrLinkType}
+                                            onChange={() => updateConfig({ qrLinkType: 'donation' })}
+                                            style={{ marginTop: '3px' }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: config.textColor }}>
+                                                    {t('qrLinkDonation')}
+                                                </span>
+                                                <span style={{ fontSize: '0.65rem', backgroundColor: config.successColor, color: config.buttonTextColor, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                    FAST DONATE
+                                                </span>
+                                            </div>
+                                            <span style={{ fontSize: '0.78rem', color: effSecondaryTextColor }}>
+                                                {t('qrLinkDonationDesc')}
+                                            </span>
+                                            <span style={{ fontSize: '0.72rem', color: effHighlightColor, fontFamily: 'monospace', marginTop: '2px', wordBreak: 'break-all' }}>
+                                                https://dd.extra-life.org/index.cfm?fuseaction=twitchDonate.participant&participantID={activeParticipantId}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    {/* Version 3: Custom URL */}
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '12px',
+                                        padding: '12px',
+                                        backgroundColor: config.qrLinkType === 'custom' ? hexToRgba(effHighlightColor, 0.12) : hexToRgba(config.panelBorderColor, 0.1),
+                                        border: `2px solid ${config.qrLinkType === 'custom' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.3)}`,
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}>
+                                        <input
+                                            type="radio"
+                                            name="qrLinkType"
+                                            value="custom"
+                                            checked={config.qrLinkType === 'custom'}
+                                            onChange={() => updateConfig({ qrLinkType: 'custom' })}
+                                            style={{ marginTop: '3px' }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: config.textColor }}>
+                                                {t('qrLinkCustom')}
+                                            </span>
+                                            {config.qrLinkType === 'custom' && (
+                                                <input
+                                                    type="url"
+                                                    value={config.qrCustomUrl || ''}
+                                                    onChange={(e) => updateConfig({ qrCustomUrl: e.target.value })}
+                                                    placeholder={t('qrLinkCustomPlaceholder')}
+                                                    style={{ ...styles.input, fontSize: '0.85rem', padding: '6px 10px', marginTop: '6px' }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* Resolved Target URL Preview & Actions */}
+                                <label style={{ ...styles.label, marginTop: '8px' }}>{t('qrTargetUrl')}</label>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'stretch' }}>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={effectiveQrUrl}
+                                        style={{ ...styles.input, flex: 1, fontFamily: 'monospace', fontSize: '0.82rem', opacity: 0.9, backgroundColor: hexToRgba(config.panelBorderColor, 0.1) }}
+                                    />
+                                    <a
+                                        href={effectiveQrUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '8px 12px',
+                                            fontSize: '0.78rem',
+                                            backgroundColor: config.panelColor,
+                                            border: `1px solid ${effSecondaryButtonBgColor}`,
+                                            color: config.textColor,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            textDecoration: 'none'
+                                        }}
+                                    >
+                                        ↗ {t('qrOpenUrl')}
+                                    </a>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopyQrLink()}
+                                        style={{ ...styles.button, margin: 0, padding: '8px 12px', fontSize: '0.78rem', backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, whiteSpace: 'nowrap' }}
+                                    >
+                                        📋 {copyFeedback === 'qr-link' ? t('copied') : t('qrCopyUrl')}
+                                    </button>
+                                </div>
+
+                                {/* Title & Subtitle */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={styles.label}>{t('qrTitleLabel')}</label>
+                                        <input
+                                            type="text"
+                                            value={config.qrTitle || ''}
+                                            onChange={(e) => updateConfig({ qrTitle: e.target.value })}
+                                            placeholder={t('qrDefaultTitle')}
+                                            style={{ ...styles.input, fontSize: '0.9rem' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={styles.label}>{t('qrSubtitleLabel')}</label>
+                                        <input
+                                            type="text"
+                                            value={config.qrSubtitle || ''}
+                                            onChange={(e) => updateConfig({ qrSubtitle: e.target.value })}
+                                            placeholder={t('qrSubtitlePlaceholder')}
+                                            style={{ ...styles.input, fontSize: '0.9rem' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Colors & Style Presets */}
+                                <label style={{ ...styles.label, marginBottom: '6px' }}>{t('qrColors')}</label>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateConfig({ qrFgColor: '#000000', qrBgColor: '#ffffff', qrTransparentBg: false })}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '6px 12px',
+                                            fontSize: '0.75rem',
+                                            backgroundColor: '#ffffff',
+                                            color: '#000000',
+                                            border: '1px solid #cccccc'
+                                        }}
+                                    >
+                                        ⚪ {t('qrPresetContrast')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateConfig({ qrFgColor: effHighlightColor, qrBgColor: config.panelColor, qrTransparentBg: false })}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '6px 12px',
+                                            fontSize: '0.75rem',
+                                            backgroundColor: config.panelColor,
+                                            color: effHighlightColor,
+                                            border: `1px solid ${effHighlightColor}`
+                                        }}
+                                    >
+                                        🎨 {t('qrPresetTheme')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateConfig({ qrFgColor: '#ffffff', qrBgColor: 'transparent', qrTransparentBg: true })}
+                                        style={{
+                                            ...styles.button,
+                                            margin: 0,
+                                            padding: '6px 12px',
+                                            fontSize: '0.75rem',
+                                            backgroundColor: 'rgba(255,255,255,0.1)',
+                                            color: '#ffffff',
+                                            border: '1px dashed #ffffff'
+                                        }}
+                                    >
+                                        ✨ {t('qrPresetInverted')}
+                                    </button>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <label style={{ ...styles.label, margin: 0, fontSize: '0.85rem' }}>{t('qrFgColor')}:</label>
+                                        <input
+                                            type="color"
+                                            value={config.qrFgColor || '#000000'}
+                                            onChange={(e) => updateConfig({ qrFgColor: e.target.value })}
+                                            style={styles.colorInput}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: config.qrTransparentBg ? 0.4 : 1 }}>
+                                        <label style={{ ...styles.label, margin: 0, fontSize: '0.85rem' }}>{t('qrBgColor')}:</label>
+                                        <input
+                                            type="color"
+                                            value={config.qrBgColor && config.qrBgColor !== 'transparent' ? config.qrBgColor : '#ffffff'}
+                                            onChange={(e) => updateConfig({ qrBgColor: e.target.value, qrTransparentBg: false })}
+                                            disabled={Boolean(config.qrTransparentBg)}
+                                            style={styles.colorInput}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="checkbox-qr-transparent"
+                                            checked={Boolean(config.qrTransparentBg)}
+                                            onChange={(e) => updateConfig({ qrTransparentBg: e.target.checked })}
+                                        />
+                                        <label htmlFor="checkbox-qr-transparent" style={{ ...styles.label, margin: 0, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            {t('qrTransparentBg')}
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Size & Dashboard Card Toggle */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginBottom: '18px' }}>
+                                    <div>
+                                        <label style={styles.label}>{t('qrSizeLabel')} ({config.qrSize || 220}px)</label>
+                                        <input
+                                            type="range"
+                                            min="140"
+                                            max="360"
+                                            step="10"
+                                            value={config.qrSize || 220}
+                                            onChange={(e) => updateConfig({ qrSize: Number(e.target.value) })}
+                                            style={{ width: '100%', cursor: 'pointer' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '18px' }}>
+                                            <input
+                                                type="checkbox"
+                                                id="checkbox-qr-dashboard"
+                                                checked={config.qrShowCardInDashboard !== false}
+                                                onChange={(e) => updateConfig({ qrShowCardInDashboard: e.target.checked })}
+                                            />
+                                            <label htmlFor="checkbox-qr-dashboard" style={{ ...styles.label, margin: 0, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                                {t('qrShowInDashboard')}
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Live Preview & Download Card */}
+                                <div style={{
+                                    ...styles.card,
+                                    backgroundColor: hexToRgba(config.panelBorderColor, 0.08),
+                                    border: `2px solid ${effHighlightColor}`,
+                                    padding: '16px',
+                                    alignItems: 'center',
+                                    gap: '14px'
+                                }}>
+                                    <h4 style={{ margin: 0, color: effHeaderColor, fontSize: '0.95rem' }}>
+                                        {t('qrPreview')}
+                                    </h4>
+
+                                    {/* Preview Box */}
+                                    <div style={{
+                                        padding: '16px',
+                                        backgroundColor: config.qrTransparentBg ? hexToRgba(config.panelColor, 0.9) : (config.qrBgColor || '#ffffff'),
+                                        borderRadius: '10px',
+                                        border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`,
+                                        display: 'inline-flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+                                    }}>
+                                        {config.qrTitle && (
+                                            <div style={{
+                                                fontSize: '0.9rem',
+                                                fontWeight: 'bold',
+                                                color: config.qrTransparentBg ? config.textColor : (config.qrFgColor || '#000000'),
+                                                fontFamily: config.fontFamily,
+                                                textAlign: 'center',
+                                                marginBottom: '4px'
+                                            }}>
+                                                {config.qrTitle}
+                                            </div>
+                                        )}
+                                        <QRCodeSvg
+                                            url={effectiveQrUrl}
+                                            size={Math.min(220, config.qrSize || 220)}
+                                            fgColor={config.qrFgColor || '#000000'}
+                                            bgColor={config.qrTransparentBg ? 'transparent' : (config.qrBgColor || '#ffffff')}
+                                            errorCorrectionLevel={config.qrErrorCorrection || 'M'}
+                                            title={config.qrTitle || 'Extra Life Donation QR'}
+                                        />
+                                        {config.qrSubtitle && (
+                                            <div style={{
+                                                fontSize: '0.72rem',
+                                                color: config.qrTransparentBg ? effSecondaryTextColor : '#555555',
+                                                textAlign: 'center',
+                                                maxWidth: '200px'
+                                            }}>
+                                                {config.qrSubtitle}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons for QR Code */}
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: '500px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => downloadQRCodePng(effectiveQrUrl, `extralife-donation-qr-${activeParticipantId}.png`, 1024, config.qrFgColor, config.qrTransparentBg ? 'transparent' : config.qrBgColor, config.qrErrorCorrection)}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 14px', fontSize: '0.8rem', backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, flex: 1 }}
+                                        >
+                                            💾 {t('qrDownloadPng')} (1024px)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => downloadQRCodeSvg(effectiveQrUrl, `extralife-donation-qr-${activeParticipantId}.svg`, config.qrFgColor, config.qrTransparentBg ? 'transparent' : config.qrBgColor, config.qrErrorCorrection)}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 14px', fontSize: '0.8rem', backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, flex: 1 }}
+                                        >
+                                            📐 {t('qrDownloadSvg')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => openOverlay('qrcode', 'width=450,height=520')}
+                                            style={{ ...styles.button, margin: 0, padding: '8px 14px', fontSize: '0.8rem', backgroundColor: hexToRgba(config.panelBorderColor, 0.25), border: `1px solid ${config.panelBorderColor}`, color: config.textColor, flex: 1 }}
+                                        >
+                                            ↗ {t('openPopup')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </CollapsibleSection>
+
                             <CollapsibleSection title={t('twitchIntegration')} isInitiallyCollapsed={true} styles={styles}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '10px' }}>
                                     <input 
@@ -5429,6 +6144,23 @@ const App = () => {
             {overlayType === 'schedule' && <ScheduleOverlay items={config.scheduleItems} styles={styles} accentColor1={config.accentColor1} accentColor2={config.accentColor2} timeColor={effHighlightColor} dividerColor={effDividerColor} headerColor={effHeaderColor} textColor={config.textColor} fontFamily={config.fontFamily} t={t} />}
             {overlayType === 'sponsors' && <SponsorOverlay sponsors={config.sponsors} styles={styles} animationDuration={config.sponsorDisplayDuration} t={t} />}
             {overlayType === 'text' && <TextOverlay filename={config.selectedTextFile} customText={config.customTextContent} styles={styles} fontFamily={config.fontFamily} textColor={config.textColor} accentColor1={config.accentColor1} highlightColor={effHighlightColor} alignment={config.textOverlayAlignment} fontSize={config.textOverlayFontSize} t={t} />}
+            {overlayType === 'qrcode' && (
+              <QRCodeOverlay
+                url={effectiveQrUrl}
+                title={config.qrTitle || t('qrDefaultTitle')}
+                subtitle={config.qrSubtitle || (participantName ? `${participantName} - Extra Life` : (config.qrLinkType === 'page' ? t('qrLinkPage') : t('qrLinkDonation')))}
+                fgColor={config.qrFgColor || '#000000'}
+                bgColor={config.qrBgColor || '#ffffff'}
+                isTransparent={Boolean(config.qrTransparentBg)}
+                size={config.qrSize || 240}
+                fontFamily={config.fontFamily}
+                textColor={config.textColor}
+                accentColor1={config.accentColor1}
+                panelColor={config.panelColor}
+                panelBorderColor={config.panelBorderColor}
+                t={t}
+              />
+            )}
           </>
         )}
       </div>
