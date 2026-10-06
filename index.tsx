@@ -2213,12 +2213,33 @@ const App = () => {
       try {
           const item = localStorage.getItem(`${STORAGE_PREFIX}config_${profileId}`);
           if (item) return JSON.parse(item);
+          // Fallback: If not found and profileId is not default, try loading default profile
+          if (profileId !== 'default') {
+              const defItem = localStorage.getItem(`${STORAGE_PREFIX}config_default`);
+              if (defItem) return JSON.parse(defItem);
+          } else {
+              // If profileId is default but null, check if any profile config exists in localStorage
+              for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && key.startsWith(`${STORAGE_PREFIX}config_`)) {
+                      const val = localStorage.getItem(key);
+                      if (val) return JSON.parse(val);
+                  }
+              }
+          }
       } catch (e) {}
       return null;
   };
   const saveStoredConfig = (profileId: string, cfg: any) => {
       try {
-          localStorage.setItem(`${STORAGE_PREFIX}config_${profileId}`, JSON.stringify(cfg));
+          const targetKey = `${STORAGE_PREFIX}config_${profileId || 'default'}`;
+          localStorage.setItem(targetKey, JSON.stringify(cfg));
+          // Mirror config to default or participant ID so standalone OBS overlays can read the active settings
+          if (profileId && profileId !== 'default') {
+              localStorage.setItem(`${STORAGE_PREFIX}config_default`, JSON.stringify(cfg));
+          } else if (cfg?.participantId) {
+              localStorage.setItem(`${STORAGE_PREFIX}config_${cfg.participantId}`, JSON.stringify(cfg));
+          }
       } catch (e) {}
   };
   const loadStoredData = (profileId: string) => {
@@ -2290,6 +2311,7 @@ const App = () => {
     participantId: '',
     teamId: '',
     useParticipantTeamId: false,
+    theme: 'neon-vibe',
     refreshInterval: 60,
     currency: 'USD',
     customExchangeRate: 0,
@@ -2728,24 +2750,30 @@ const App = () => {
 
   const updateConfig = (updates: Partial<typeof config>) => {
       setIsSaving(true);
-      const newConfig = { ...config, ...updates };
-      if (newConfig.refreshInterval !== undefined && newConfig.refreshInterval !== 0) {
-          newConfig.refreshInterval = Math.max(MIN_REFRESH_INTERVAL, newConfig.refreshInterval);
-      }
-      setConfig(newConfig); 
-      saveStoredConfig(currentProfile, newConfig);
+      setConfig(prev => {
+          const newConfig = { ...prev, ...updates };
+          if (newConfig.refreshInterval !== undefined && newConfig.refreshInterval !== 0) {
+              newConfig.refreshInterval = Math.max(MIN_REFRESH_INTERVAL, newConfig.refreshInterval);
+          }
+          configRef.current = newConfig;
 
-      // Broadcast to other tabs & OBS overlays
-      try {
-          syncChannelRef.current?.postMessage({ type: 'config-updated', payload: newConfig });
-      } catch (e) {}
+          const activeProf = currentProfileRef.current || 'default';
+          saveStoredConfig(activeProf, newConfig);
 
-      // If connected to local backend server, emit
-      if (socketRef.current?.connected) {
-          socketRef.current.emit('update-config', { profileId: currentProfile, config: newConfig });
-      } else {
-          setTimeout(() => setIsSaving(false), 200);
-      }
+          // Broadcast to other tabs & OBS overlays
+          try {
+              syncChannelRef.current?.postMessage({ type: 'config-updated', payload: newConfig });
+          } catch (e) {}
+
+          // If connected to local backend server, emit
+          if (socketRef.current?.connected) {
+              socketRef.current.emit('update-config', { profileId: activeProf, config: newConfig });
+          } else {
+              setTimeout(() => setIsSaving(false), 200);
+          }
+
+          return newConfig;
+      });
   };
 
   // === MULTI-TAB & OBS OVERLAY BROADCAST CHANNEL ===
@@ -2825,8 +2853,9 @@ const App = () => {
           let newTeamId = currentConf.teamId;
           if (currentConf.useParticipantTeamId && partData.teamID) {
               newTeamId = String(partData.teamID);
+              setTeamIdInput(newTeamId);
               if (newTeamId !== currentConf.teamId) {
-                  updateConfig({ teamId: newTeamId });
+                  updateConfig({ teamId: newTeamId, useParticipantTeamId: true });
               }
           }
 
@@ -3106,6 +3135,9 @@ const App = () => {
           setConfig(prev => ({ ...prev, ...storedConfig }));
           setParticipantIdInput(storedConfig.participantId || '');
           setTeamIdInput(storedConfig.teamId || '');
+          if (storedConfig.theme) {
+              setSelectedPreset(storedConfig.theme);
+          }
       } else if (profile !== 'default') {
           setConfig(prev => ({ ...prev, participantId: profile }));
           setParticipantIdInput(profile);
@@ -3317,6 +3349,10 @@ const App = () => {
   }, [config.eventStartTime, t]);
 
   useEffect(() => {
+    if (config.theme && config.theme !== 'custom') {
+        setSelectedPreset(config.theme);
+        return;
+    }
     const currentColors = { 
         backgroundColor: config.backgroundColor, 
         textColor: config.textColor, 
@@ -3343,8 +3379,14 @@ const App = () => {
             setSelectedPreset('custom');
         }
     }
-  }, [config.backgroundColor, config.textColor, config.panelColor, config.panelBorderColor, config.accentColor1, config.accentColor2, config.successColor, config.errorColor, config.buttonTextColor, savedThemes]);
+  }, [config.theme, config.backgroundColor, config.textColor, config.panelColor, config.panelBorderColor, config.accentColor1, config.accentColor2, config.successColor, config.errorColor, config.buttonTextColor, savedThemes]);
 
+  // Keep teamIdInput in sync with config.teamId when auto-detect is enabled or input is empty
+  useEffect(() => {
+    if (config.teamId && (config.useParticipantTeamId || !teamIdInput)) {
+      setTeamIdInput(config.teamId);
+    }
+  }, [config.teamId, config.useParticipantTeamId]);
 
   // === HANDLERS ===
   const handleSwitchProfile = (e: React.FormEvent) => {
@@ -3360,10 +3402,15 @@ const App = () => {
   const handleIdSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     lastFetchTimeRef.current = 0;
+    const currentConf = configRef.current;
+    const effectiveTeamId = currentConf.useParticipantTeamId 
+      ? (currentConf.teamId || teamIdInput)
+      : teamIdInput;
+
     updateConfig({
         participantId: participantIdInput,
-        teamId: teamIdInput,
-        useParticipantTeamId: config.useParticipantTeamId
+        teamId: effectiveTeamId,
+        useParticipantTeamId: currentConf.useParticipantTeamId
     });
     // Trigger instant fetch on submit
     setTimeout(fetchClientSideData, 50);
@@ -3377,6 +3424,7 @@ const App = () => {
         const found = savedThemes.find(t => t.id === profileId);
         if (found) {
             updateConfig({
+                theme: presetKey,
                 ...found.colors,
                 ...(found.fontFamily ? { fontFamily: found.fontFamily } : {}),
                 ...(found.notificationAnimation ? { notificationAnimation: found.notificationAnimation } : {})
@@ -3386,6 +3434,7 @@ const App = () => {
         const preset = COLOR_PRESETS[presetKey as keyof typeof COLOR_PRESETS];
         if (preset) {
             updateConfig({
+                theme: presetKey,
                 ...preset.colors,
                 headerColor: '',
                 secondaryTextColor: '',
@@ -3411,6 +3460,8 @@ const App = () => {
                 inputBorderColor: '',
             });
         }
+    } else {
+        updateConfig({ theme: 'custom' });
     }
   };
 
@@ -3421,49 +3472,52 @@ const App = () => {
       return;
     }
     setFormError('');
+    const currentConf = configRef.current;
     const newProfile: SavedThemeProfile = {
       id: `theme-${Date.now()}`,
       name: trimmed,
       colors: {
-        backgroundColor: config.backgroundColor,
-        textColor: config.textColor,
-        panelColor: config.panelColor,
-        panelBorderColor: config.panelBorderColor,
-        accentColor1: config.accentColor1,
-        accentColor2: config.accentColor2,
-        successColor: config.successColor,
-        errorColor: config.errorColor,
-        buttonTextColor: config.buttonTextColor,
-        headerColor: config.headerColor,
-        secondaryTextColor: config.secondaryTextColor,
-        primaryButtonBgColor: config.primaryButtonBgColor,
-        secondaryButtonBgColor: config.secondaryButtonBgColor,
-        dividerColor: config.dividerColor,
-        highlightColor: config.highlightColor,
-        donorNameColor: config.donorNameColor,
-        progressBarColor: config.progressBarColor,
-        progressBarBgColor: config.progressBarBgColor,
-        progressBarTextColor: config.progressBarTextColor,
-        progressBarBorderColor: config.progressBarBorderColor,
-        splitMilestoneColors: config.splitMilestoneColors,
-        milestoneProgressBarColor: config.milestoneProgressBarColor,
-        milestoneProgressBarBgColor: config.milestoneProgressBarBgColor,
-        milestoneProgressBarTextColor: config.milestoneProgressBarTextColor,
-        milestoneProgressBarBorderColor: config.milestoneProgressBarBorderColor,
-        toastBgColor: config.toastBgColor,
-        toastBorderColor: config.toastBorderColor,
-        toastNameColor: config.toastNameColor,
-        toastAmountColor: config.toastAmountColor,
-        inputBgColor: config.inputBgColor,
-        inputBorderColor: config.inputBorderColor,
+        backgroundColor: currentConf.backgroundColor,
+        textColor: currentConf.textColor,
+        panelColor: currentConf.panelColor,
+        panelBorderColor: currentConf.panelBorderColor,
+        accentColor1: currentConf.accentColor1,
+        accentColor2: currentConf.accentColor2,
+        successColor: currentConf.successColor,
+        errorColor: currentConf.errorColor,
+        buttonTextColor: currentConf.buttonTextColor,
+        headerColor: currentConf.headerColor,
+        secondaryTextColor: currentConf.secondaryTextColor,
+        primaryButtonBgColor: currentConf.primaryButtonBgColor,
+        secondaryButtonBgColor: currentConf.secondaryButtonBgColor,
+        dividerColor: currentConf.dividerColor,
+        highlightColor: currentConf.highlightColor,
+        donorNameColor: currentConf.donorNameColor,
+        progressBarColor: currentConf.progressBarColor,
+        progressBarBgColor: currentConf.progressBarBgColor,
+        progressBarTextColor: currentConf.progressBarTextColor,
+        progressBarBorderColor: currentConf.progressBarBorderColor,
+        splitMilestoneColors: currentConf.splitMilestoneColors,
+        milestoneProgressBarColor: currentConf.milestoneProgressBarColor,
+        milestoneProgressBarBgColor: currentConf.milestoneProgressBarBgColor,
+        milestoneProgressBarTextColor: currentConf.milestoneProgressBarTextColor,
+        milestoneProgressBarBorderColor: currentConf.milestoneProgressBarBorderColor,
+        toastBgColor: currentConf.toastBgColor,
+        toastBorderColor: currentConf.toastBorderColor,
+        toastNameColor: currentConf.toastNameColor,
+        toastAmountColor: currentConf.toastAmountColor,
+        inputBgColor: currentConf.inputBgColor,
+        inputBorderColor: currentConf.inputBorderColor,
       },
-      fontFamily: config.fontFamily,
-      notificationAnimation: config.notificationAnimation
+      fontFamily: currentConf.fontFamily,
+      notificationAnimation: currentConf.notificationAnimation
     };
     const updatedThemes = [...savedThemes, newProfile];
     setSavedThemes(updatedThemes);
     saveStoredThemes(updatedThemes);
-    setSelectedPreset(`profile:${newProfile.id}`);
+    const presetKey = `profile:${newProfile.id}`;
+    setSelectedPreset(presetKey);
+    updateConfig({ theme: presetKey });
     setNewThemeNameInput('');
     setThemeActionFeedback(t('themeSavedSuccess'));
     setTimeout(() => setThemeActionFeedback(null), 3000);
@@ -3472,51 +3526,53 @@ const App = () => {
   const handleUpdateThemeProfile = () => {
     if (!selectedPreset.startsWith('profile:')) return;
     const profileId = selectedPreset.replace('profile:', '');
+    const currentConf = configRef.current;
     const updatedThemes = savedThemes.map(th => {
       if (th.id === profileId) {
         return {
           ...th,
           colors: {
-            backgroundColor: config.backgroundColor,
-            textColor: config.textColor,
-            panelColor: config.panelColor,
-            panelBorderColor: config.panelBorderColor,
-            accentColor1: config.accentColor1,
-            accentColor2: config.accentColor2,
-            successColor: config.successColor,
-            errorColor: config.errorColor,
-            buttonTextColor: config.buttonTextColor,
-            headerColor: config.headerColor,
-            secondaryTextColor: config.secondaryTextColor,
-            primaryButtonBgColor: config.primaryButtonBgColor,
-            secondaryButtonBgColor: config.secondaryButtonBgColor,
-            dividerColor: config.dividerColor,
-            highlightColor: config.highlightColor,
-            donorNameColor: config.donorNameColor,
-            progressBarColor: config.progressBarColor,
-            progressBarBgColor: config.progressBarBgColor,
-            progressBarTextColor: config.progressBarTextColor,
-            progressBarBorderColor: config.progressBarBorderColor,
-            splitMilestoneColors: config.splitMilestoneColors,
-            milestoneProgressBarColor: config.milestoneProgressBarColor,
-            milestoneProgressBarBgColor: config.milestoneProgressBarBgColor,
-            milestoneProgressBarTextColor: config.milestoneProgressBarTextColor,
-            milestoneProgressBarBorderColor: config.milestoneProgressBarBorderColor,
-            toastBgColor: config.toastBgColor,
-            toastBorderColor: config.toastBorderColor,
-            toastNameColor: config.toastNameColor,
-            toastAmountColor: config.toastAmountColor,
-            inputBgColor: config.inputBgColor,
-            inputBorderColor: config.inputBorderColor,
+            backgroundColor: currentConf.backgroundColor,
+            textColor: currentConf.textColor,
+            panelColor: currentConf.panelColor,
+            panelBorderColor: currentConf.panelBorderColor,
+            accentColor1: currentConf.accentColor1,
+            accentColor2: currentConf.accentColor2,
+            successColor: currentConf.successColor,
+            errorColor: currentConf.errorColor,
+            buttonTextColor: currentConf.buttonTextColor,
+            headerColor: currentConf.headerColor,
+            secondaryTextColor: currentConf.secondaryTextColor,
+            primaryButtonBgColor: currentConf.primaryButtonBgColor,
+            secondaryButtonBgColor: currentConf.secondaryButtonBgColor,
+            dividerColor: currentConf.dividerColor,
+            highlightColor: currentConf.highlightColor,
+            donorNameColor: currentConf.donorNameColor,
+            progressBarColor: currentConf.progressBarColor,
+            progressBarBgColor: currentConf.progressBarBgColor,
+            progressBarTextColor: currentConf.progressBarTextColor,
+            progressBarBorderColor: currentConf.progressBarBorderColor,
+            splitMilestoneColors: currentConf.splitMilestoneColors,
+            milestoneProgressBarColor: currentConf.milestoneProgressBarColor,
+            milestoneProgressBarBgColor: currentConf.milestoneProgressBarBgColor,
+            milestoneProgressBarTextColor: currentConf.milestoneProgressBarTextColor,
+            milestoneProgressBarBorderColor: currentConf.milestoneProgressBarBorderColor,
+            toastBgColor: currentConf.toastBgColor,
+            toastBorderColor: currentConf.toastBorderColor,
+            toastNameColor: currentConf.toastNameColor,
+            toastAmountColor: currentConf.toastAmountColor,
+            inputBgColor: currentConf.inputBgColor,
+            inputBorderColor: currentConf.inputBorderColor,
           },
-          fontFamily: config.fontFamily,
-          notificationAnimation: config.notificationAnimation
+          fontFamily: currentConf.fontFamily,
+          notificationAnimation: currentConf.notificationAnimation
         };
       }
       return th;
     });
     setSavedThemes(updatedThemes);
     saveStoredThemes(updatedThemes);
+    updateConfig({ theme: selectedPreset });
     setThemeActionFeedback(t('themeUpdatedSuccess'));
     setTimeout(() => setThemeActionFeedback(null), 3000);
   };
@@ -3529,6 +3585,7 @@ const App = () => {
     saveStoredThemes(updatedThemes);
     if (selectedPreset === `profile:${targetId}`) {
       setSelectedPreset('custom');
+      updateConfig({ theme: 'custom' });
     }
     setThemeActionFeedback(t('themeDeletedSuccess'));
     setTimeout(() => setThemeActionFeedback(null), 3000);
@@ -3536,8 +3593,10 @@ const App = () => {
 
   const handleLoadSavedTheme = (theme: SavedThemeProfile) => {
     if (!theme) return;
-    setSelectedPreset(`profile:${theme.id}`);
+    const presetKey = `profile:${theme.id}`;
+    setSelectedPreset(presetKey);
     updateConfig({
+      theme: presetKey,
       ...theme.colors,
       ...(theme.fontFamily ? { fontFamily: theme.fontFamily } : {}),
       ...(theme.notificationAnimation ? { notificationAnimation: theme.notificationAnimation } : {})
@@ -4711,13 +4770,30 @@ const App = () => {
                                 <input 
                                     type="checkbox" 
                                     checked={config.useParticipantTeamId} 
-                                    onChange={e => updateConfig({ useParticipantTeamId: e.target.checked })}
+                                    onChange={e => {
+                                        const checked = e.target.checked;
+                                        updateConfig({ useParticipantTeamId: checked });
+                                        if (checked) {
+                                            lastFetchTimeRef.current = 0;
+                                            setTimeout(fetchClientSideData, 50);
+                                        }
+                                    }}
                                 />
                                 <label style={{...styles.label, opacity: 1, cursor: 'pointer', flexGrow: 1 }}>{t('autoDetect')}</label>
                             </div>
 
-                            <label style={config.useParticipantTeamId ? {...styles.label, opacity: 0.5} : styles.label}>{t('teamId')}</label>
-                            <input type="text" value={teamIdInput} onChange={(e) => setTeamIdInput(e.target.value)} style={{...styles.input, ...(config.useParticipantTeamId && {backgroundColor: hexToRgba(config.panelColor, 0.5)})}} disabled={config.useParticipantTeamId} />
+                            <label style={config.useParticipantTeamId ? {...styles.label, opacity: 0.75} : styles.label}>{t('teamId')}</label>
+                            <input 
+                                type="text" 
+                                value={config.useParticipantTeamId ? (config.teamId || teamIdInput) : teamIdInput} 
+                                onChange={(e) => {
+                                    setTeamIdInput(e.target.value);
+                                    updateConfig({ teamId: e.target.value });
+                                }} 
+                                placeholder={config.useParticipantTeamId ? (config.teamId || t('autoDetect')) : t('teamId')}
+                                style={{...styles.input, ...(config.useParticipantTeamId && {backgroundColor: hexToRgba(config.panelColor, 0.5), cursor: 'not-allowed'})}} 
+                                disabled={config.useParticipantTeamId} 
+                            />
 
                             <label style={styles.label}>{t('refreshSeconds')}</label>
                             <input 

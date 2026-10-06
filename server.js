@@ -230,7 +230,7 @@ app.post('/api/theme', async (req, res) => {
     const profile = await getOrCreateProfile(profileId);
     const newColors = COLOR_PRESETS[name].colors;
     
-    profile.config = { ...profile.config, ...newColors };
+    profile.config = { ...profile.config, ...newColors, theme: name };
     
     await saveProfileConfig(profileId, profile.config);
     io.to(`profile:${profileId}`).emit('config-updated', profile.config);
@@ -269,6 +269,7 @@ const DEFAULT_CONFIG = {
     participantId: '',
     teamId: '',
     useParticipantTeamId: false,
+    theme: 'neon-vibe',
     refreshInterval: 60,
     currency: 'USD',
     customExchangeRate: 0,
