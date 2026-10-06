@@ -366,7 +366,7 @@ const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
 }) => {
   const pbBg = effProgressBarBgColor || config?.progressBarBgColor || '#1a1a1a';
   const pbFill = effProgressBarColor || config?.progressBarColor || config?.successColor || '#00ff00';
-  const pbText = effProgressBarTextColor || config?.progressBarTextColor || '#ffffff';
+  const pbText = effProgressBarTextColor || config?.progressBarTextColor || config?.textColor || '#ffffff';
   const pbBorder = effProgressBarBorderColor || config?.progressBarBorderColor || config?.panelBorderColor || '#00ffff';
 
   const teamProgress = teamGoal > 0 ? Math.min(100, Math.max(0, (teamTotalRaised / teamGoal) * 100)) : 0;
@@ -448,14 +448,14 @@ const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
           textShadow: `2px 2px 4px ${hexToRgba(config?.backgroundColor || '#000000', 0.85)}`,
           lineHeight: 1.1
         }}>
-          {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {currencyPrefix}{convertAmount(teamTotalRaised || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
         {teamGoal > 0 && (
           <span style={{
             fontSize: '0.95rem',
             color: effSecondaryTextColor
           }}>
-            {t('teamGoal')}: <strong style={{ color: config?.textColor || '#ffffff' }}>{currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            {t('teamGoal')}: <strong style={{ color: config?.textColor || '#ffffff' }}>{currencyPrefix}{convertAmount(teamGoal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </span>
         )}
       </div>
@@ -464,7 +464,7 @@ const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
       <div style={{
         position: 'relative',
         width: '100%',
-        height: '40px',
+        height: '42px',
         backgroundColor: pbBg,
         border: `2px solid ${pbBorder}`,
         overflow: 'hidden',
@@ -487,17 +487,18 @@ const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
           justifyContent: 'center',
           color: pbText,
           fontFamily: config?.fontFamily || styles?.progressBarContainer?.fontFamily,
-          fontSize: '0.95rem',
+          fontSize: 'clamp(0.75rem, 2.4vw, 1.05rem)',
           fontWeight: 'bold',
-          textShadow: `1px 1px 3px ${hexToRgba(config?.backgroundColor || '#000000', 0.95)}`,
+          textShadow: '0 0 4px #000000, 1px 1px 2px #000000, -1px -1px 2px #000000, 1px -1px 2px #000000, -1px 1px 2px #000000',
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
           padding: '0 10px',
-          boxSizing: 'border-box' as const
+          boxSizing: 'border-box' as const,
+          zIndex: 2
         }}>
           {teamGoal > 0
-            ? `${currencyPrefix}${convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${currencyPrefix}${convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${teamProgress.toFixed(1)}%)`
-            : `${currencyPrefix}${convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ? `${currencyPrefix}${convertAmount(teamTotalRaised || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${currencyPrefix}${convertAmount(teamGoal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${teamProgress.toFixed(1)}%)`
+            : `${currencyPrefix}${convertAmount(teamTotalRaised || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           }
         </div>
       </div>
@@ -514,11 +515,11 @@ const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
           gap: '8px'
         }}>
           <span>
-            {t('teamGoal')}: <span style={{ color: config?.textColor || '#ffffff', fontWeight: 'bold' }}>{currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            {t('teamGoal')}: <span style={{ color: config?.textColor || '#ffffff', fontWeight: 'bold' }}>{currencyPrefix}{convertAmount(teamGoal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </span>
           {remaining > 0 ? (
             <span style={{ color: pbFill, fontWeight: 'bold' }}>
-              {currencyPrefix}{convertAmount(remaining).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('toGo')}
+              {currencyPrefix}{convertAmount(remaining || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('toGo')}
             </span>
           ) : (
             <span style={{ color: config?.successColor || '#00ff00', fontWeight: 'bold' }}>
@@ -845,7 +846,7 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
 }) => {
   const pbBg = effProgressBarBgColor || config.progressBarBgColor || '#1a1a1a';
   const pbFill = effProgressBarColor || config.progressBarColor || config.successColor || '#00ff00';
-  const pbText = effProgressBarTextColor || config.progressBarTextColor || '#ffffff';
+  const pbText = effProgressBarTextColor || config.progressBarTextColor || config.textColor || '#ffffff';
   const pbBorder = effProgressBarBorderColor || config.progressBarBorderColor || config.panelBorderColor || '#00ffff';
 
   const [teamSearch, setTeamSearch] = useState('');
@@ -853,12 +854,17 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
   const [fetchedAccounts, setFetchedAccounts] = useState<Record<string, { donations: any[]; total: number; goal: number; name: string }>>({});
   const [loadingAccount, setLoadingAccount] = useState(false);
 
-  // Active account ID defaults to the current participantId
-  const activeAccountId = selectedAccountId || String(participantId || '');
+  // Active account ID defaults to the current participantId or first team participant if participant is not in team
+  const activeAccountId = selectedAccountId || (
+    participantId && teamParticipants.some(p => String(p.participantID) === String(participantId))
+      ? String(participantId)
+      : (teamParticipants.length > 0 ? String(teamParticipants[0]?.participantID) : String(participantId || ''))
+  );
 
   // Asynchronously fetch extra data for a team member if chosen
   useEffect(() => {
-    if (!activeAccountId || activeAccountId === String(participantId)) return;
+    if (!activeAccountId) return;
+    if (activeAccountId === String(participantId) && participantDonations && participantDonations.length > 0) return;
     if (fetchedAccounts[activeAccountId]) return;
 
     let isMounted = true;
@@ -885,39 +891,45 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
     });
 
     return () => { isMounted = false; };
-  }, [activeAccountId, participantId]);
+  }, [activeAccountId, participantId, participantDonations]);
 
   // Resolve active account details
   const activeMemberFromTeam = teamParticipants.find(p => String(p.participantID) === activeAccountId);
   const activeFetched = fetchedAccounts[activeAccountId];
 
-  const activeAccountName = activeAccountId === String(participantId)
-    ? (participantName || t('specificAccount'))
-    : (activeFetched?.name || activeMemberFromTeam?.displayName || `Account ${activeAccountId}`);
+  const activeAccountName = activeAccountId === String(participantId) && participantName
+    ? participantName
+    : (activeFetched?.name || activeMemberFromTeam?.displayName || (activeAccountId ? `Account ${activeAccountId}` : t('specificAccount')));
 
-  const activeAccountTotal = activeAccountId === String(participantId)
+  const activeAccountTotal = activeAccountId === String(participantId) && typeof participantTotalRaised === 'number' && participantTotalRaised > 0
     ? participantTotalRaised
     : (activeFetched?.total ?? (activeMemberFromTeam?.sumDonations ?? 0));
 
-  const activeAccountGoal = activeAccountId === String(participantId)
+  const activeAccountGoal = activeAccountId === String(participantId) && typeof participantGoal === 'number' && participantGoal > 0
     ? participantGoal
     : (activeFetched?.goal ?? (activeMemberFromTeam?.fundraisingGoal ?? 0));
 
   // Resolve donations for active account
   const rawAccountDonations = useMemo(() => {
-    if (activeAccountId === String(participantId)) {
-      if (participantDonations && participantDonations.length > 0) {
-        return participantDonations;
-      }
-      return teamDonations.filter(d => String(d.participantID) === String(participantId) || (participantName && d.recipientName === participantName));
+    if (activeAccountId === String(participantId) && participantDonations && participantDonations.length > 0) {
+      return participantDonations;
     }
     if (activeFetched?.donations && activeFetched.donations.length > 0) {
       return activeFetched.donations;
     }
-    return teamDonations.filter(d => 
-      String(d.participantID) === activeAccountId || 
-      (activeMemberFromTeam && d.recipientName === activeMemberFromTeam.displayName)
+    const matchingTeamDonations = teamDonations.filter(d => 
+      (activeAccountId && String(d.participantID) === activeAccountId) || 
+      (activeMemberFromTeam && d.recipientName === activeMemberFromTeam.displayName) ||
+      (activeFetched?.name && d.recipientName === activeFetched.name) ||
+      (activeAccountId === String(participantId) && participantName && d.recipientName === participantName)
     );
+    if (matchingTeamDonations.length > 0) {
+      return matchingTeamDonations;
+    }
+    if (activeAccountId === String(participantId) && participantDonations) {
+      return participantDonations;
+    }
+    return [];
   }, [activeAccountId, participantId, participantDonations, teamDonations, participantName, activeFetched, activeMemberFromTeam]);
 
   // Filtered team donations
@@ -1016,15 +1028,16 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: pbText,
-                fontSize: '0.9rem',
+                fontSize: 'clamp(0.75rem, 2vw, 0.95rem)',
                 fontFamily: config.fontFamily,
                 fontWeight: 'bold',
-                textShadow: `1px 1px 2px ${hexToRgba(config.backgroundColor, 0.85)}`,
+                textShadow: '0 0 4px #000000, 1px 1px 2px #000000, -1px -1px 2px #000000, 1px -1px 2px #000000, -1px 1px 2px #000000',
                 pointerEvents: 'none',
                 whiteSpace: 'nowrap',
-                padding: '0 8px'
+                padding: '0 8px',
+                zIndex: 2
               }}>
-                {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({teamProgress.toFixed(1)}%)
+                {currencyPrefix}{convertAmount(teamTotalRaised || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {currencyPrefix}{convertAmount(teamGoal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({teamProgress.toFixed(1)}%)
               </div>
             </div>
           </div>
@@ -2209,105 +2222,7 @@ const App = () => {
       } catch (e) {}
   };
 
-  const loadStoredConfig = (profileId: string) => {
-      try {
-          const item = localStorage.getItem(`${STORAGE_PREFIX}config_${profileId}`);
-          if (item) return JSON.parse(item);
-          // Fallback: If not found and profileId is not default, try loading default profile
-          if (profileId !== 'default') {
-              const defItem = localStorage.getItem(`${STORAGE_PREFIX}config_default`);
-              if (defItem) return JSON.parse(defItem);
-          } else {
-              // If profileId is default but null, check if any profile config exists in localStorage
-              for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  if (key && key.startsWith(`${STORAGE_PREFIX}config_`)) {
-                      const val = localStorage.getItem(key);
-                      if (val) return JSON.parse(val);
-                  }
-              }
-          }
-      } catch (e) {}
-      return null;
-  };
-  const saveStoredConfig = (profileId: string, cfg: any) => {
-      try {
-          const targetKey = `${STORAGE_PREFIX}config_${profileId || 'default'}`;
-          localStorage.setItem(targetKey, JSON.stringify(cfg));
-          // Mirror config to default or participant ID so standalone OBS overlays can read the active settings
-          if (profileId && profileId !== 'default') {
-              localStorage.setItem(`${STORAGE_PREFIX}config_default`, JSON.stringify(cfg));
-          } else if (cfg?.participantId) {
-              localStorage.setItem(`${STORAGE_PREFIX}config_${cfg.participantId}`, JSON.stringify(cfg));
-          }
-      } catch (e) {}
-  };
-  const loadStoredData = (profileId: string) => {
-      try {
-          const item = localStorage.getItem(`${STORAGE_PREFIX}data_${profileId}`);
-          if (item) return JSON.parse(item);
-      } catch (e) {}
-      return null;
-  };
-  const saveStoredData = (profileId: string, data: any) => {
-      try {
-          localStorage.setItem(`${STORAGE_PREFIX}data_${profileId}`, JSON.stringify(data));
-      } catch (e) {}
-  };
-
-  // === STATE ===
-  const [isConnected, setIsConnected] = useState(false);
-  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(isGitHubPagesHost);
-  const socketRef = useRef<Socket | null>(null);
-  const syncChannelRef = useRef<BroadcastChannel | null>(null);
-  const twitchClientRef = useRef<any>(null);
-  const seenDonationIdsRef = useRef<Set<string>>(new Set());
-
-  // Profile
-  const [currentProfile, setCurrentProfile] = useState<string>('default');
-  const [profileInput, setProfileInput] = useState<string>('');
-
-  // Data State
-  const [donations, setDonations] = useState<Donation[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [totalRaised, setTotalRaised] = useState<number>(0);
-  const [teamTotalRaised, setTeamTotalRaised] = useState<number>(0);
-  const [teamGoal, setTeamGoal] = useState<number>(0);
-  const [teamName, setTeamName] = useState<string>('');
-  const [teamDonations, setTeamDonations] = useState<any[]>([]);
-  const [teamParticipants, setTeamParticipants] = useState<any[]>([]);
-  const [participantName, setParticipantName] = useState<string>('');
-  
-  // Notification Queue System
-  const [activeToasts, setActiveToasts] = useState<Donation[]>([]);
-  const [toastQueue, setToastQueue] = useState<Donation[]>([]);
-  
-  const [goal, setGoal] = useState<number>(0); 
-  const [conversionRate, setConversionRate] = useState<number>(1.0); 
-  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
-
-  // UI/Config State
-  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-header' | 'team-donations' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
-  const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
-  const [formError, setFormError] = useState('');
-  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [timeDisplay, setTimeDisplay] = useState<string>('');
-  const [celebrationKey, setCelebrationKey] = useState<number>(0);
-  const [isSaving, setIsSaving] = useState(false);
-  const [availableSponsorFiles, setAvailableSponsorFiles] = useState<string[]>([]);
-  const [selectedSponsorFile, setSelectedSponsorFile] = useState<string>('');
-  const [sponsorUrlInput, setSponsorUrlInput] = useState<string>('');
-  const [sponsorNameInput, setSponsorNameInput] = useState<string>('');
-  const [availableSoundFiles, setAvailableSoundFiles] = useState<string[]>([]);
-  const [selectedSoundFile, setSelectedSoundFile] = useState<string>('');
-  const [availableTextFiles, setAvailableTextFiles] = useState<string[]>([]);
-  const [pendingTwitchToken, setPendingTwitchToken] = useState<string | null>(null);
-
-  // Configuration State (Synced with Server)
-  const [config, setConfig] = useState({
+  const DEFAULT_CONFIG = {
     participantId: '',
     teamId: '',
     useParticipantTeamId: false,
@@ -2377,8 +2292,8 @@ const App = () => {
 
     selectedTextFile: '',
     customTextContent: '',
-    textOverlayAlignment: 'top-left', // New option
-    textOverlayFontSize: 1.5, // New option, defaults to 1.5rem
+    textOverlayAlignment: 'top-left',
+    textOverlayFontSize: 1.5,
 
     // QR Code Generator Settings
     qrLinkType: 'donation' as 'page' | 'donation' | 'custom',
@@ -2391,11 +2306,166 @@ const App = () => {
     qrSize: 220,
     qrErrorCorrection: 'M' as 'L' | 'M' | 'Q' | 'H',
     qrShowCardInDashboard: true,
-  });
+  };
 
-  // Local input state for form (debounced by user action essentially)
-  const [participantIdInput, setParticipantIdInput] = useState('');
-  const [teamIdInput, setTeamIdInput] = useState('');
+  const loadStoredConfig = (profileId: string) => {
+      try {
+          const item = localStorage.getItem(`${STORAGE_PREFIX}config_${profileId}`);
+          if (item) return JSON.parse(item);
+          // Fallback: If not found and profileId is not default, try loading default profile
+          if (profileId !== 'default') {
+              const defItem = localStorage.getItem(`${STORAGE_PREFIX}config_default`);
+              if (defItem) {
+                  const parsed = JSON.parse(defItem);
+                  return { ...parsed, participantId: profileId };
+              }
+          } else {
+              // If profileId is default, check if last_profile was saved
+              const lastProf = localStorage.getItem(`${STORAGE_PREFIX}last_profile`);
+              if (lastProf) {
+                  const lastItem = localStorage.getItem(`${STORAGE_PREFIX}config_${lastProf}`);
+                  if (lastItem) return JSON.parse(lastItem);
+              }
+              const defItem = localStorage.getItem(`${STORAGE_PREFIX}config_default`);
+              if (defItem) return JSON.parse(defItem);
+              // If profileId is default, check if any profile config exists in localStorage
+              for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && key.startsWith(`${STORAGE_PREFIX}config_`) && key !== `${STORAGE_PREFIX}config_default`) {
+                      const val = localStorage.getItem(key);
+                      if (val) return JSON.parse(val);
+                  }
+              }
+          }
+      } catch (e) {}
+      return null;
+  };
+
+  const saveStoredConfig = (profileId: string, cfg: any) => {
+      try {
+          const targetKey = `${STORAGE_PREFIX}config_${profileId || 'default'}`;
+          localStorage.setItem(targetKey, JSON.stringify(cfg));
+          // Mirror config to default so standalone OBS overlays can read the active settings
+          if (profileId && profileId !== 'default') {
+              localStorage.setItem(`${STORAGE_PREFIX}config_default`, JSON.stringify(cfg));
+          }
+          if (cfg?.participantId) {
+              localStorage.setItem(`${STORAGE_PREFIX}config_${cfg.participantId}`, JSON.stringify(cfg));
+              localStorage.setItem(`${STORAGE_PREFIX}last_profile`, String(cfg.participantId));
+          }
+      } catch (e) {}
+  };
+
+  const loadStoredData = (profileId: string) => {
+      try {
+          const item = localStorage.getItem(`${STORAGE_PREFIX}data_${profileId}`);
+          if (item) return JSON.parse(item);
+          if (profileId !== 'default') {
+              const defItem = localStorage.getItem(`${STORAGE_PREFIX}data_default`);
+              if (defItem) return JSON.parse(defItem);
+          }
+      } catch (e) {}
+      return null;
+  };
+
+  const saveStoredData = (profileId: string, data: any) => {
+      try {
+          const targetKey = `${STORAGE_PREFIX}data_${profileId || 'default'}`;
+          localStorage.setItem(targetKey, JSON.stringify(data));
+          if (profileId && profileId !== 'default') {
+              localStorage.setItem(`${STORAGE_PREFIX}data_default`, JSON.stringify(data));
+          }
+      } catch (e) {}
+  };
+
+  const getUrlProfile = () => {
+      if (typeof window === 'undefined') return 'default';
+      const params = new URLSearchParams(window.location.search);
+      const urlProf = params.get('profile');
+      if (urlProf) return urlProf;
+      try {
+          const last = localStorage.getItem(`${STORAGE_PREFIX}last_profile`);
+          if (last) return last;
+      } catch (e) {}
+      return 'default';
+  };
+
+  const initialProfile = getUrlProfile();
+  const initialLoadedConfig = (() => {
+      const stored = loadStoredConfig(initialProfile);
+      if (stored) {
+          let merged = { ...DEFAULT_CONFIG, ...stored };
+          // If stored has a theme preset and it's built-in, apply its colors
+          if (stored.theme && stored.theme !== 'custom' && (COLOR_PRESETS as any)[stored.theme]) {
+              const presetColors = (COLOR_PRESETS as any)[stored.theme].colors;
+              merged = { ...merged, ...presetColors, ...stored };
+          }
+          if (initialProfile !== 'default' && !merged.participantId) {
+              merged.participantId = initialProfile;
+          }
+          return merged;
+      }
+      return initialProfile !== 'default' ? { ...DEFAULT_CONFIG, participantId: initialProfile } : DEFAULT_CONFIG;
+  })();
+  const initialLoadedData = loadStoredData(initialProfile) || {};
+
+  // === STATE ===
+  const [isConnected, setIsConnected] = useState(false);
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(isGitHubPagesHost);
+  const socketRef = useRef<Socket | null>(null);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const twitchClientRef = useRef<any>(null);
+  const seenDonationIdsRef = useRef<Set<string>>(new Set());
+
+  // Profile
+  const [currentProfile, setCurrentProfile] = useState<string>(initialProfile);
+  const [profileInput, setProfileInput] = useState<string>(initialLoadedConfig.participantId || '');
+
+  // Data State - initialized from storage if available
+  const [donations, setDonations] = useState<Donation[]>(initialLoadedData.donations || []);
+  const [milestones, setMilestones] = useState<Milestone[]>(initialLoadedData.milestones || []);
+  const [totalRaised, setTotalRaised] = useState<number>(initialLoadedData.totalRaised || 0);
+  const [teamTotalRaised, setTeamTotalRaised] = useState<number>(initialLoadedData.teamTotalRaised || 0);
+  const [teamGoal, setTeamGoal] = useState<number>(initialLoadedData.teamGoal || 0);
+  const [teamName, setTeamName] = useState<string>(initialLoadedData.teamName || '');
+  const [teamDonations, setTeamDonations] = useState<any[]>(initialLoadedData.teamDonations || []);
+  const [teamParticipants, setTeamParticipants] = useState<any[]>(initialLoadedData.teamParticipants || []);
+  const [participantName, setParticipantName] = useState<string>(initialLoadedData.participantName || '');
+  
+  // Notification Queue System
+  const [activeToasts, setActiveToasts] = useState<Donation[]>([]);
+  const [toastQueue, setToastQueue] = useState<Donation[]>([]);
+  
+  const [goal, setGoal] = useState<number>(initialLoadedData.goal || 0); 
+  const [conversionRate, setConversionRate] = useState<number>(initialLoadedData.conversionRate || 1.0); 
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(initialLoadedData.lastFetchedAt ? new Date(initialLoadedData.lastFetchedAt) : null);
+
+  // UI/Config State
+  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-header' | 'team-donations' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
+  const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
+  const [formError, setFormError] = useState('');
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [timeDisplay, setTimeDisplay] = useState<string>('');
+  const [celebrationKey, setCelebrationKey] = useState<number>(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [availableSponsorFiles, setAvailableSponsorFiles] = useState<string[]>([]);
+  const [selectedSponsorFile, setSelectedSponsorFile] = useState<string>('');
+  const [sponsorUrlInput, setSponsorUrlInput] = useState<string>('');
+  const [sponsorNameInput, setSponsorNameInput] = useState<string>('');
+  const [availableSoundFiles, setAvailableSoundFiles] = useState<string[]>([]);
+  const [selectedSoundFile, setSelectedSoundFile] = useState<string>('');
+  const [availableTextFiles, setAvailableTextFiles] = useState<string[]>([]);
+  const [pendingTwitchToken, setPendingTwitchToken] = useState<string | null>(null);
+
+  // Configuration State (Initialized with stored settings)
+  const [config, setConfig] = useState(initialLoadedConfig);
+
+  // Local input state for form
+  const [participantIdInput, setParticipantIdInput] = useState<string>(initialLoadedConfig.participantId || (initialProfile !== 'default' ? initialProfile : ''));
+  const [teamIdInput, setTeamIdInput] = useState<string>(initialLoadedConfig.teamId || '');
   const [commandTrigger, setCommandTrigger] = useState('');
   const [commandResponse, setCommandResponse] = useState('');
   const [websiteTotalInput, setWebsiteTotalInput] = useState('');
@@ -2406,7 +2476,7 @@ const App = () => {
   const [themeActionFeedback, setThemeActionFeedback] = useState<string | null>(null);
   const [showAdvancedColors, setShowAdvancedColors] = useState<boolean>(false);
 
-  const [selectedPreset, setSelectedPreset] = useState<string>('custom');
+  const [selectedPreset, setSelectedPreset] = useState<string>(initialLoadedConfig.theme || 'neon-vibe');
   
   // === REFS ===
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -2839,36 +2909,59 @@ const App = () => {
   const fetchClientSideData = useCallback(async () => {
       const currentConf = configRef.current;
       const pid = currentConf.participantId;
-      if (!pid) return;
+      const explicitTeamId = currentConf.teamId;
+      const useAutoTeam = !!currentConf.useParticipantTeamId;
+
+      if (!pid && !explicitTeamId) return;
 
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
 
       try {
-          // 1. Participant Details (Use dd.extra-life.org for CORS compliance on GitHub Pages)
-          const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}`);
-          if (!partRes.ok) return;
-          const partData = await partRes.json();
+          let partData: any = null;
+          let donData: any[] = [];
+          let mileData: any[] = [];
 
-          let newTeamId = currentConf.teamId;
-          if (currentConf.useParticipantTeamId && partData.teamID) {
-              newTeamId = String(partData.teamID);
-              setTeamIdInput(newTeamId);
-              if (newTeamId !== currentConf.teamId) {
-                  updateConfig({ teamId: newTeamId, useParticipantTeamId: true });
-              }
+          // 1. Participant Details (Use dd.extra-life.org for CORS compliance on GitHub Pages)
+          if (pid) {
+              try {
+                  const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}`);
+                  if (partRes.ok) {
+                      partData = await partRes.json();
+                  }
+              } catch (e) {}
+
+              // 2. Donations
+              try {
+                  const donRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+                  if (donRes.ok) {
+                      donData = await donRes.json();
+                  }
+              } catch (e) {}
+
+              // 3. Milestones
+              try {
+                  const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones`);
+                  if (mileRes.ok) {
+                      const rawMileData = await mileRes.json();
+                      if (Array.isArray(rawMileData)) {
+                          mileData = [...rawMileData].sort((a: any, b: any) => (a.fundraisingGoal || 0) - (b.fundraisingGoal || 0));
+                      }
+                  }
+              } catch (e) {}
           }
 
-          // 2. Donations
-          const donRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
-          const donData = donRes.ok ? await donRes.json() : [];
-
-          // 3. Milestones
-          const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones`);
-          const rawMileData = mileRes.ok ? await mileRes.json() : [];
-          const mileData = Array.isArray(rawMileData)
-              ? [...rawMileData].sort((a: any, b: any) => (a.fundraisingGoal || 0) - (b.fundraisingGoal || 0))
-              : [];
+          // Target team ID:
+          // If auto-detect is enabled and participant belongs to a team, auto-detect team ID.
+          // Otherwise, strictly respect explicitTeamId from settings.
+          let targetTeamId = explicitTeamId;
+          if (useAutoTeam && partData?.teamID) {
+              targetTeamId = String(partData.teamID);
+              if (targetTeamId !== currentConf.teamId) {
+                  setTeamIdInput(targetTeamId);
+                  updateConfig({ teamId: targetTeamId, useParticipantTeamId: true });
+              }
+          }
 
           // 4. Team Details (optional)
           let tRaised = 0;
@@ -2876,12 +2969,12 @@ const App = () => {
           let tName = '';
           let tDonations: any[] = [];
           let tParticipants: any[] = [];
-          if (newTeamId) {
+          if (targetTeamId) {
               try {
                   const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
-                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}`).catch(() => null),
-                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(() => null),
-                      fetch(`https://dd.extra-life.org/api/teams/${newTeamId}/participants`).catch(() => null)
+                      fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}`).catch(() => null),
+                      fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(() => null),
+                      fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants`).catch(() => null)
                   ]);
                   if (teamRes && teamRes.ok) {
                       const tData = await teamRes.json();
@@ -2918,16 +3011,18 @@ const App = () => {
               }
           });
 
-          const newRaised = partData.sumDonations || 0;
-          const newGoal = partData.fundraisingGoal || 0;
-          const pName = partData.displayName || '';
+          const newRaised = partData ? (partData.sumDonations || 0) : totalRaisedRef.current;
+          const newGoal = partData ? (partData.fundraisingGoal || 0) : 0;
+          const pName = partData ? (partData.displayName || '') : '';
           const previousTotal = totalRaisedRef.current;
 
-          setParticipantName(pName);
-          setTotalRaised(newRaised);
-          setGoal(newGoal);
-          setDonations(donData);
-          setMilestones(mileData);
+          if (partData) {
+              setParticipantName(pName);
+              setTotalRaised(newRaised);
+              setGoal(newGoal);
+              setDonations(donData);
+              setMilestones(mileData);
+          }
           setTeamTotalRaised(tRaised);
           setTeamGoal(tGoal);
           setTeamName(tName);
@@ -3032,7 +3127,7 @@ const App = () => {
   // Periodic polling in Standalone Mode or in Overlays
   useEffect(() => {
       if (!isStandaloneMode && overlayType === 'none' && socketRef.current?.connected) return;
-      if (!config.participantId) return;
+      if (!config.participantId && !config.teamId) return;
 
       const refreshSeconds = Math.max(MIN_REFRESH_INTERVAL, Number(config.refreshInterval) || 60);
       const intervalMs = refreshSeconds * 1000;
@@ -3048,7 +3143,7 @@ const App = () => {
       }, intervalMs);
 
       return () => clearInterval(timer);
-  }, [isStandaloneMode, overlayType, config.participantId, config.refreshInterval, fetchClientSideData]);
+  }, [isStandaloneMode, overlayType, config.participantId, config.teamId, config.useParticipantTeamId, config.refreshInterval, fetchClientSideData]);
 
   // Client-side Twitch IRC Client via tmi.js
   useEffect(() => {
@@ -3132,11 +3227,18 @@ const App = () => {
       // Instant load from localStorage
       const storedConfig = loadStoredConfig(profile);
       if (storedConfig) {
-          setConfig(prev => ({ ...prev, ...storedConfig }));
-          setParticipantIdInput(storedConfig.participantId || '');
-          setTeamIdInput(storedConfig.teamId || '');
-          if (storedConfig.theme) {
-              setSelectedPreset(storedConfig.theme);
+          let merged = { ...storedConfig };
+          if (storedConfig.theme && storedConfig.theme !== 'custom' && (COLOR_PRESETS as any)[storedConfig.theme]) {
+              const presetColors = (COLOR_PRESETS as any)[storedConfig.theme].colors;
+              merged = { ...merged, ...presetColors, ...storedConfig };
+          }
+          const effectivePid = merged.participantId || (profile !== 'default' ? profile : '');
+          merged.participantId = effectivePid;
+          setConfig(prev => ({ ...prev, ...merged }));
+          setParticipantIdInput(effectivePid);
+          setTeamIdInput(merged.teamId || '');
+          if (merged.theme) {
+              setSelectedPreset(merged.theme);
           }
       } else if (profile !== 'default') {
           setConfig(prev => ({ ...prev, participantId: profile }));
@@ -3396,6 +3498,9 @@ const App = () => {
   };
 
   const handleChangeId = () => {
+    try {
+      localStorage.removeItem(`${STORAGE_PREFIX}last_profile`);
+    } catch (e) {}
     window.location.href = window.location.pathname;
   };
 
@@ -3405,13 +3510,23 @@ const App = () => {
     const currentConf = configRef.current;
     const effectiveTeamId = currentConf.useParticipantTeamId 
       ? (currentConf.teamId || teamIdInput)
-      : teamIdInput;
+      : (teamIdInput || currentConf.teamId);
 
-    updateConfig({
+    const updates: Partial<typeof config> = {
         participantId: participantIdInput,
         teamId: effectiveTeamId,
-        useParticipantTeamId: currentConf.useParticipantTeamId
-    });
+        useParticipantTeamId: !!currentConf.useParticipantTeamId,
+        theme: selectedPreset,
+        language: currentConf.language,
+        currency: currentConf.currency,
+        refreshInterval: currentConf.refreshInterval
+    };
+
+    if (selectedPreset && selectedPreset !== 'custom' && (COLOR_PRESETS as any)[selectedPreset]) {
+        Object.assign(updates, (COLOR_PRESETS as any)[selectedPreset].colors);
+    }
+
+    updateConfig(updates);
     // Trigger instant fetch on submit
     setTimeout(fetchClientSideData, 50);
   };
@@ -4210,7 +4325,7 @@ const App = () => {
   // === EFFECTIVE PROGRESS BAR COLORS (SPLIT FROM REST OF THEME) ===
   const effProgressBarColor = config.progressBarColor || config.accentColor1;
   const effProgressBarBgColor = config.progressBarBgColor || config.panelColor;
-  const effProgressBarTextColor = config.progressBarTextColor || config.buttonTextColor;
+  const effProgressBarTextColor = config.progressBarTextColor || config.textColor || '#ffffff';
   const effProgressBarBorderColor = config.progressBarBorderColor || config.panelBorderColor;
 
   const effMilestoneBarColor = (config.splitMilestoneColors && config.milestoneProgressBarColor)

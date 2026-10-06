@@ -495,107 +495,113 @@ async function fetchProfileConversionRate(profile) {
 
 // Fetch data logic for a specific profile
 export async function fetchProfileData(profile) {
-    if (!profile.config.participantId) return;
+    if (!profile.config.participantId && !profile.config.teamId) return;
     
     try {
+        let userJson = null;
+
         // 1. Participant Data
-        const userRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}`);
-        const userJson = await userRes.json();
-        
-        if (!userJson || !userJson.sumDonations) {
-             return;
-        }
+        if (profile.config.participantId) {
+            try {
+                const userRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}`);
+                if (userRes && (userRes.ok || typeof userRes.ok === 'undefined')) {
+                    userJson = await userRes.json();
+                }
+            } catch (e) {}
 
-        const newTotal = userJson.sumDonations;
-        const newGoal = userJson.fundraisingGoal;
-        let milestoneCrossed = false;
-        
-        // Check for Milestones crossing
-        if (profile.data.totalRaised > 0 && newTotal > profile.data.totalRaised && profile.initialFetchComplete) {
-            const passedMilestones = profile.data.milestones.filter(m => 
-                profile.data.totalRaised < m.fundraisingGoal && newTotal >= m.fundraisingGoal
-            );
-            
-            const passedGoal = profile.data.totalRaised < profile.data.goal && newTotal >= profile.data.goal;
-            
-            if (passedMilestones.length > 0) {
-                 io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: passedMilestones[0] });
-                 if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
-                     profile.twitchClient.say(profile.config.twitchChannel, `🎉 MILESTONE UNLOCKED: ${passedMilestones[0].description}!`);
-                 }
-                 milestoneCrossed = true;
-            } else if (passedGoal) {
-                 io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: { description: 'Fundraising Goal Reached!' } });
-                 if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
-                     profile.twitchClient.say(profile.config.twitchChannel, `🎉 GOAL REACHED! We did it!`);
-                 }
-                 milestoneCrossed = true;
-            }
-        }
-
-        profile.data.totalRaised = newTotal;
-        profile.data.goal = newGoal;
-        profile.data.participantName = userJson.displayName || '';
-
-        // 2. Donations
-        const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
-        const donationsJson = await donationsRes.json();
-        
-        if (!Array.isArray(donationsJson)) {
-            console.error(`[${profile.id}] Donations API did not return an array`);
-            return;
-        }
-
-        // Process Donations
-        for (const d of donationsJson) {
-            const id = d.donationID;
-            if (!profile.seenDonationIds.has(id)) {
-                // It's new!
-                if (profile.initialFetchComplete) {
-                    const donationObj = {
-                        donationID: d.donationID,
-                        displayName: d.displayName || 'Anonymous',
-                        amount: d.amount,
-                        message: d.message,
-                        createdDateUTC: d.createdDateUTC
-                    };
-                    io.to(`profile:${profile.id}`).emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
-                    io.emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
+            if (userJson && typeof userJson.sumDonations === 'number') {
+                const newTotal = userJson.sumDonations;
+                const newGoal = userJson.fundraisingGoal || 0;
+                let milestoneCrossed = false;
+                
+                // Check for Milestones crossing
+                if (profile.data.totalRaised > 0 && newTotal > profile.data.totalRaised && profile.initialFetchComplete) {
+                    const passedMilestones = profile.data.milestones.filter(m => 
+                        profile.data.totalRaised < m.fundraisingGoal && newTotal >= m.fundraisingGoal
+                    );
                     
-                    // Twitch Alert
-                    if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
-                        const currencyPrefix = profile.config.currency === 'CAD' ? 'C$' : '$';
-                        const amount = profile.config.currency === 'CAD' ? d.amount * profile.data.conversionRate : d.amount;
-                        let chatMsg = `🚨 New Donation! ${d.displayName || 'Anonymous'} just donated ${currencyPrefix}${amount.toFixed(2)}!`;
-                        if (d.message) chatMsg += ` "${d.message}"`;
-                        profile.twitchClient.say(profile.config.twitchChannel, chatMsg);
+                    const passedGoal = profile.data.totalRaised < profile.data.goal && newTotal >= profile.data.goal;
+                    
+                    if (passedMilestones.length > 0) {
+                         io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: passedMilestones[0] });
+                         if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
+                             profile.twitchClient.say(profile.config.twitchChannel, `🎉 MILESTONE UNLOCKED: ${passedMilestones[0].description}!`);
+                         }
+                         milestoneCrossed = true;
+                    } else if (passedGoal) {
+                         io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: { description: 'Fundraising Goal Reached!' } });
+                         if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
+                             profile.twitchClient.say(profile.config.twitchChannel, `🎉 GOAL REACHED! We did it!`);
+                         }
+                         milestoneCrossed = true;
                     }
                 }
-                profile.seenDonationIds.add(id);
+
+                profile.data.totalRaised = newTotal;
+                profile.data.goal = newGoal;
+                profile.data.participantName = userJson.displayName || '';
+
+                // 2. Donations
+                try {
+                    const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+                    if (donationsRes && (donationsRes.ok || typeof donationsRes.ok === 'undefined')) {
+                        const donationsJson = await donationsRes.json();
+                        if (Array.isArray(donationsJson)) {
+                            for (const d of donationsJson) {
+                                const id = d.donationID;
+                                if (!profile.seenDonationIds.has(id)) {
+                                    if (profile.initialFetchComplete) {
+                                        const donationObj = {
+                                            donationID: d.donationID,
+                                            displayName: d.displayName || 'Anonymous',
+                                            amount: d.amount,
+                                            message: d.message,
+                                            createdDateUTC: d.createdDateUTC
+                                        };
+                                        io.to(`profile:${profile.id}`).emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
+                                        io.emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
+                                        
+                                        if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
+                                            const currencyPrefix = profile.config.currency === 'CAD' ? 'C$' : '$';
+                                            const amount = profile.config.currency === 'CAD' ? d.amount * profile.data.conversionRate : d.amount;
+                                            let chatMsg = `🚨 New Donation! ${d.displayName || 'Anonymous'} just donated ${currencyPrefix}${amount.toFixed(2)}!`;
+                                            if (d.message) chatMsg += ` "${d.message}"`;
+                                            profile.twitchClient.say(profile.config.twitchChannel, chatMsg);
+                                        }
+                                    }
+                                    profile.seenDonationIds.add(id);
+                                }
+                            }
+
+                            profile.data.donations = donationsJson.map(d => ({
+                                donationID: d.donationID,
+                                displayName: d.displayName || 'Anonymous',
+                                amount: d.amount,
+                                message: d.message,
+                                createdDateUTC: d.createdDateUTC
+                            }));
+                        }
+                    }
+                } catch (e) {}
+
+                // 3. Milestones
+                try {
+                    const milestonesRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/milestones`);
+                    if (milestonesRes && (milestonesRes.ok || typeof milestonesRes.ok === 'undefined')) {
+                        const milestonesJson = await milestonesRes.json();
+                        if (Array.isArray(milestonesJson)) {
+                            profile.data.milestones = milestonesJson.sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
+                        }
+                    }
+                } catch (e) {}
             }
-        }
-        
-        // Update local data store
-        profile.data.donations = donationsJson.map(d => ({
-            donationID: d.donationID,
-            displayName: d.displayName || 'Anonymous',
-            amount: d.amount,
-            message: d.message,
-            createdDateUTC: d.createdDateUTC
-        }));
-        
-        // 3. Milestones
-        const milestonesRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/milestones`);
-        const milestonesJson = await milestonesRes.json();
-        if (Array.isArray(milestonesJson)) {
-            profile.data.milestones = milestonesJson.sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
         }
 
         // 4. Team Data
         let currentTeamId = profile.config.teamId;
         let configUpdated = false;
 
-        if (profile.config.useParticipantTeamId && userJson.teamID) {
+        if (profile.config.useParticipantTeamId && userJson?.teamID) {
             const apiTeamId = String(userJson.teamID);
             if (apiTeamId !== String(profile.config.teamId)) {
                  profile.config.teamId = apiTeamId;
