@@ -327,18 +327,451 @@ const NextMilestoneOverlay = ({
     );
 };
 
-const TeamOverlay = ({ styles, currencyPrefix, convertAmount, teamTotalRaised, successColor, backgroundColor, hexToRgba, teamName, t }: any) => {
-    const containerStyle = styles.overlayContainer || styles.progressBarContainer;
-    return (
-      <div style={{...containerStyle, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', boxSizing: 'border-box' as const}}>
-        <span style={{...styles.label, opacity: 1, fontSize: '0.9rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', padding: '0 5px'}}>
-            {teamName || t('teamTotal')}
-        </span>
-        <span style={{...styles.progressText, fontSize: '1.8rem', color: successColor, textShadow: `2px 2px ${hexToRgba(backgroundColor, 0.7)}`}}>
-          {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-        </span>
+interface TeamHeaderOverlayProps {
+  styles: any;
+  currencyPrefix: string;
+  convertAmount: (amount: number) => number;
+  teamTotalRaised: number;
+  teamGoal: number;
+  teamName: string;
+  teamDonationsCount?: number;
+  config: any;
+  effHeaderColor: string;
+  effSecondaryTextColor: string;
+  effProgressBarColor: string;
+  effProgressBarBgColor?: string;
+  effProgressBarTextColor?: string;
+  effProgressBarBorderColor?: string;
+  hexToRgba: (hex: string, alpha: number) => string;
+  t: (key: string, vars?: any) => string;
+}
+
+const TeamHeaderOverlay: React.FC<TeamHeaderOverlayProps> = ({
+  styles,
+  currencyPrefix,
+  convertAmount,
+  teamTotalRaised,
+  teamGoal,
+  teamName,
+  teamDonationsCount,
+  config,
+  effHeaderColor,
+  effSecondaryTextColor,
+  effProgressBarColor,
+  effProgressBarBgColor,
+  effProgressBarTextColor,
+  effProgressBarBorderColor,
+  hexToRgba,
+  t
+}) => {
+  const pbBg = effProgressBarBgColor || config?.progressBarBgColor || '#1a1a1a';
+  const pbFill = effProgressBarColor || config?.progressBarColor || config?.successColor || '#00ff00';
+  const pbText = effProgressBarTextColor || config?.progressBarTextColor || '#ffffff';
+  const pbBorder = effProgressBarBorderColor || config?.progressBarBorderColor || config?.panelBorderColor || '#00ffff';
+
+  const teamProgress = teamGoal > 0 ? Math.min(100, Math.max(0, (teamTotalRaised / teamGoal) * 100)) : 0;
+  const remaining = Math.max(0, teamGoal - teamTotalRaised);
+
+  return (
+    <div style={{
+      ...styles.progressBarContainer,
+      backgroundColor: config?.panelColor || pbBg,
+      border: `4px solid ${pbBorder}`,
+      padding: '16px 20px',
+      boxSizing: 'border-box' as const,
+      fontFamily: config?.fontFamily,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: '8px',
+      textAlign: 'left' as const
+    }}>
+      {/* Top Header Row: Team Identity & Status */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap' as const,
+        gap: '8px'
+      }}>
+        <div style={{
+          fontSize: '1.05rem',
+          fontWeight: 'bold',
+          color: effHeaderColor || config?.textColor,
+          textShadow: `2px 2px ${config?.backgroundColor || '#000000'}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          textOverflow: 'ellipsis',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap'
+        }}>
+          👥 {teamName || t('teamTotal')}
+        </div>
+        <div style={{
+          fontSize: '0.85rem',
+          color: effSecondaryTextColor,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          {typeof teamDonationsCount === 'number' && (
+            <span>{teamDonationsCount} {t('donations')}</span>
+          )}
+          {teamGoal > 0 && (
+            <span style={{
+              backgroundColor: hexToRgba(pbFill, 0.18),
+              color: pbFill,
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              fontSize: '0.8rem'
+            }}>
+              {teamProgress.toFixed(1)}%
+            </span>
+          )}
+        </div>
       </div>
-    );
+
+      {/* Primary Raised Amount Display */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap' as const,
+        gap: '6px',
+        margin: '2px 0'
+      }}>
+        <span style={{
+          fontSize: '2.4rem',
+          fontWeight: 'bold',
+          color: config?.successColor || '#00ff00',
+          textShadow: `2px 2px 4px ${hexToRgba(config?.backgroundColor || '#000000', 0.85)}`,
+          lineHeight: 1.1
+        }}>
+          {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+        {teamGoal > 0 && (
+          <span style={{
+            fontSize: '0.95rem',
+            color: effSecondaryTextColor
+          }}>
+            {t('teamGoal')}: <strong style={{ color: config?.textColor || '#ffffff' }}>{currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </span>
+        )}
+      </div>
+
+      {/* Progress Bar Track */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        height: '40px',
+        backgroundColor: pbBg,
+        border: `2px solid ${pbBorder}`,
+        overflow: 'hidden',
+        boxSizing: 'border-box' as const
+      }}>
+        <div style={{
+          height: '100%',
+          width: `${teamGoal > 0 ? teamProgress : 100}%`,
+          backgroundColor: pbFill,
+          transition: 'width 0.5s ease-in-out'
+        }} />
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: pbText,
+          fontFamily: config?.fontFamily || styles?.progressBarContainer?.fontFamily,
+          fontSize: '0.95rem',
+          fontWeight: 'bold',
+          textShadow: `1px 1px 3px ${hexToRgba(config?.backgroundColor || '#000000', 0.95)}`,
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          padding: '0 10px',
+          boxSizing: 'border-box' as const
+        }}>
+          {teamGoal > 0
+            ? `${currencyPrefix}${convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${currencyPrefix}${convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${teamProgress.toFixed(1)}%)`
+            : `${currencyPrefix}${convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          }
+        </div>
+      </div>
+
+      {/* Objective / Remaining Target Info */}
+      {teamGoal > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.85rem',
+          color: effSecondaryTextColor,
+          flexWrap: 'wrap' as const,
+          gap: '8px'
+        }}>
+          <span>
+            {t('teamGoal')}: <span style={{ color: config?.textColor || '#ffffff', fontWeight: 'bold' }}>{currencyPrefix}{convertAmount(teamGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </span>
+          {remaining > 0 ? (
+            <span style={{ color: pbFill, fontWeight: 'bold' }}>
+              {currencyPrefix}{convertAmount(remaining).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('toGo')}
+            </span>
+          ) : (
+            <span style={{ color: config?.successColor || '#00ff00', fontWeight: 'bold' }}>
+              🎉 {t('goalReached') || 'Goal Reached!'}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TeamOverlay = TeamHeaderOverlay;
+
+interface TeamDonationsOverlayProps {
+  styles: any;
+  currencyPrefix: string;
+  convertAmount: (amount: number) => number;
+  teamTotalRaised: number;
+  teamName: string;
+  teamDonations: any[];
+  config: any;
+  effHeaderColor: string;
+  effSecondaryTextColor: string;
+  effDividerColor: string;
+  effHighlightColor: string;
+  effDonorNameColor: string;
+  hexToRgba: (hex: string, alpha: number) => string;
+  t: (key: string, vars?: any) => string;
+}
+
+const TeamDonationsOverlay: React.FC<TeamDonationsOverlayProps> = ({
+  styles,
+  currencyPrefix,
+  convertAmount,
+  teamTotalRaised,
+  teamName,
+  teamDonations,
+  config,
+  effHeaderColor,
+  effSecondaryTextColor,
+  effDividerColor,
+  effHighlightColor,
+  effDonorNameColor,
+  hexToRgba,
+  t
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const sortedDonations = useMemo(() => {
+    return [...(teamDonations || [])].sort((a, b) => new Date(b.createdDateUTC).getTime() - new Date(a.createdDateUTC).getTime());
+  }, [teamDonations]);
+
+  const filteredDonations = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return sortedDonations;
+    return sortedDonations.filter(d => {
+      const donor = (d.displayName || t('anonymous')).toLowerCase();
+      const recipient = (d.recipientName || '').toLowerCase();
+      const msg = (d.message || '').toLowerCase();
+      const amt = String(d.amount);
+      return donor.includes(q) || recipient.includes(q) || msg.includes(q) || amt.includes(q);
+    });
+  }, [sortedDonations, searchTerm, t]);
+
+  return (
+    <div style={{
+      width: '100%',
+      maxWidth: '650px',
+      height: '100vh',
+      margin: '0 auto',
+      padding: '16px',
+      boxSizing: 'border-box' as const,
+      fontFamily: config?.fontFamily,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: '12px',
+      overflow: 'hidden'
+    }}>
+      {/* Header Panel */}
+      <div style={{
+        backgroundColor: config?.panelColor,
+        border: `3px solid ${effHighlightColor}`,
+        padding: '14px 16px',
+        boxSizing: 'border-box' as const,
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+        textAlign: 'left' as const
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap' as const,
+          gap: '8px',
+          borderBottom: `1px dashed ${effDividerColor}`,
+          paddingBottom: '8px'
+        }}>
+          <h3 style={{
+            margin: 0,
+            color: effHeaderColor || config?.textColor,
+            fontSize: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            textShadow: `1px 1px 2px ${config?.backgroundColor || '#000000'}`
+          }}>
+            👥 {teamName ? `${teamName} - ${t('teamDonations')}` : t('teamDonations')}
+          </h3>
+          <span style={{
+            fontSize: '0.8rem',
+            backgroundColor: hexToRgba(effHighlightColor, 0.15),
+            color: effHighlightColor,
+            padding: '3px 10px',
+            borderRadius: '12px',
+            fontWeight: 'bold'
+          }}>
+            {filteredDonations.length} {t('donations')}
+          </span>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.85rem',
+          color: effSecondaryTextColor
+        }}>
+          <span>{t('totalTeamRaised')}:</span>
+          <span style={{ color: config?.successColor || '#00ff00', fontWeight: 'bold', fontSize: '1.05rem' }}>
+            {currencyPrefix}{convertAmount(teamTotalRaised).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        <div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder={t('searchDonations')}
+            style={{
+              ...styles.input,
+              fontSize: '0.8rem',
+              padding: '6px 10px',
+              width: '100%',
+              boxSizing: 'border-box' as const
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Scrollable Donations Feed */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '10px',
+        paddingRight: '4px',
+        textAlign: 'left' as const
+      }}>
+        {filteredDonations.length === 0 ? (
+          <div style={{
+            padding: '40px 15px',
+            textAlign: 'center' as const,
+            backgroundColor: hexToRgba(config?.panelColor || '#1a1a1a', 0.7),
+            border: `2px dashed ${config?.panelBorderColor || '#555555'}`,
+            color: effSecondaryTextColor,
+            fontSize: '0.85rem'
+          }}>
+            {t('noTeamDonations')}
+          </div>
+        ) : (
+          filteredDonations.map((d: any) => {
+            const isAnonymous = !d.displayName || d.displayName.toLowerCase() === 'anonymous';
+            const donorTitle = isAnonymous ? t('anonymous') : d.displayName;
+            const formattedDate = d.createdDateUTC ? new Date(d.createdDateUTC).toLocaleString() : '';
+
+            return (
+              <div
+                key={d.donationID || `${d.createdDateUTC}-${d.amount}`}
+                style={{
+                  backgroundColor: hexToRgba(config?.panelColor || '#1a1a1a', 0.85),
+                  border: `2px solid ${hexToRgba(config?.panelBorderColor || '#444444', 0.4)}`,
+                  padding: '12px 14px',
+                  boxSizing: 'border-box' as const,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    color: effDonorNameColor,
+                    fontWeight: 'bold',
+                    fontSize: '0.95rem',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {donorTitle}
+                  </span>
+                  <span style={{
+                    color: config?.successColor || '#00ff00',
+                    fontWeight: 'bold',
+                    fontSize: '1.05rem',
+                    flexShrink: 0
+                  }}>
+                    {currencyPrefix}{convertAmount(d.amount).toFixed(2)}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap' as const,
+                  gap: '4px',
+                  marginTop: '6px',
+                  fontSize: '0.78rem',
+                  color: effSecondaryTextColor
+                }}>
+                  <span>
+                    🎯 {t('forRecipient')} <strong>{d.recipientName || teamName || 'Team'}</strong>
+                  </span>
+                  {formattedDate && (
+                    <span style={{ fontFamily: 'monospace', opacity: 0.7, fontSize: '0.72rem' }}>
+                      {formattedDate}
+                    </span>
+                  )}
+                </div>
+
+                {d.message && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '6px 10px',
+                    backgroundColor: hexToRgba(config?.backgroundColor || '#000000', 0.5),
+                    borderRadius: '4px',
+                    fontStyle: 'italic' as const,
+                    fontSize: '0.82rem',
+                    color: config?.textColor,
+                    lineHeight: 1.4,
+                    borderLeft: `3px solid ${effHighlightColor}`
+                  }}>
+                    "{d.message}"
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 };
 
 interface TeamDashboardViewProps {
@@ -1833,7 +2266,7 @@ const App = () => {
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
   // UI/Config State
-  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
+  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-header' | 'team-donations' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
   const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
@@ -2831,8 +3264,16 @@ const App = () => {
     const overlayParam = params.get('overlay');
     const rootEl = document.getElementById('root');
     
-    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text', 'qrcode', 'qr'].includes(overlayParam)) {
-        setOverlayType(overlayParam === 'qr' ? 'qrcode' : overlayParam as any);
+    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-header', 'team-donations', 'team-list', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text', 'qrcode', 'qr'].includes(overlayParam)) {
+        if (overlayParam === 'qr') {
+            setOverlayType('qrcode');
+        } else if (overlayParam === 'team-list') {
+            setOverlayType('team-donations');
+        } else if (overlayParam === 'team') {
+            setOverlayType('team-header');
+        } else {
+            setOverlayType(overlayParam as any);
+        }
         if (rootEl) rootEl.classList.remove('config-mode');
     } else {
         setOverlayType('none');
@@ -3890,7 +4331,7 @@ const App = () => {
         </div>
       )}
 
-      <div style={overlayType === 'sponsors' || overlayType === 'text' ? {width: '100%'} : styles.container}>
+      <div style={overlayType === 'sponsors' || overlayType === 'text' || overlayType === 'team-donations' || overlayType === 'team-dashboard' ? {width: '100%'} : styles.container}>
         {overlayType === 'none' && (
           <>
             <div style={styles.header}>
@@ -4018,13 +4459,48 @@ const App = () => {
                     </div>
                     <div style={styles.card}>
                         <h4 style={{ margin: '0 0 10px 0', color: effHighlightColor, fontSize: '0.95rem' }}>{t('overlayLinks')}</h4>
-                        <div style={{ display: 'flex', gap: '0.8rem', width: '100%' }}>
-                            <button type="button" onClick={() => openOverlay('team-dashboard', 'width=1280,height=850')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>
-                                ↗ {t('openPopup')}
-                            </button>
-                            <button type="button" onClick={() => handleCopyUrl('team-dashboard')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, flex: 1, fontSize: '0.85rem', padding: '10px' }}>
-                                📋 {copyFeedback === 'team-dashboard' ? t('copied') : t('copyLink')}
-                            </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: hexToRgba(config.panelColor, 0.6), padding: '8px 12px', border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`, gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: config.textColor }}>
+                                    📊 {t('teamHeaderOverlay')}
+                                </span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button type="button" onClick={() => openOverlay('team-header', 'width=850,height=220')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        ↗ {t('openPopup')}
+                                    </button>
+                                    <button type="button" onClick={() => handleCopyUrl('team-header')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        📋 {copyFeedback === 'team-header' ? t('copied') : t('copyLink')}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: hexToRgba(config.panelColor, 0.6), padding: '8px 12px', border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`, gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: config.textColor }}>
+                                    👥 {t('teamDonationsOverlay')}
+                                </span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button type="button" onClick={() => openOverlay('team-donations', 'width=500,height=750')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        ↗ {t('openPopup')}
+                                    </button>
+                                    <button type="button" onClick={() => handleCopyUrl('team-donations')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        📋 {copyFeedback === 'team-donations' ? t('copied') : t('copyLink')}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: hexToRgba(config.panelColor, 0.6), padding: '8px 12px', border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`, gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: config.textColor }}>
+                                    🖥️ {t('teamDashboardOverlay')}
+                                </span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button type="button" onClick={() => openOverlay('team-dashboard', 'width=1280,height=850')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        ↗ {t('openPopup')}
+                                    </button>
+                                    <button type="button" onClick={() => handleCopyUrl('team-dashboard')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        📋 {copyFeedback === 'team-dashboard' ? t('copied') : t('copyLink')}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4169,8 +4645,9 @@ const App = () => {
                                     { title: t('progressBar'), fn: () => openOverlay('progress', 'width=800,height=150'), type: 'progress' },
                                     { title: t('notifications'), fn: () => openOverlay('notifications', 'width=800,height=600'), type: 'notifications' },
                                     { title: t('nextMilestone'), fn: () => openOverlay('milestone', 'width=800,height=180'), type: 'milestone' },
-                                    { title: t('teamTracker'), fn: () => openOverlay('team', 'width=400,height=100'), type: 'team' },
-                                    { title: t('teamDashboard'), fn: () => openOverlay('team-dashboard', 'width=1280,height=850'), type: 'team-dashboard' },
+                                    { title: t('teamHeaderOverlay'), fn: () => openOverlay('team-header', 'width=850,height=220'), type: 'team-header' },
+                                    { title: t('teamDonationsOverlay'), fn: () => openOverlay('team-donations', 'width=500,height=750'), type: 'team-donations' },
+                                    { title: t('teamDashboardOverlay'), fn: () => openOverlay('team-dashboard', 'width=1280,height=850'), type: 'team-dashboard' },
                                     { title: t('qrCodeOverlayLink'), fn: () => openOverlay('qrcode', 'width=450,height=520'), type: 'qrcode' },
                                     { title: t('celebration'), fn: () => openOverlay('celebration', 'width=1920,height=1080'), type: 'celebration' },
                                     { title: t('schedule'), fn: () => openOverlay('schedule', 'width=600,height=400'), type: 'schedule' },
@@ -6103,7 +6580,44 @@ const App = () => {
                 t={t}
               />
             )}
-            {overlayType === 'team' && <TeamOverlay styles={styles} currencyPrefix={currencyPrefix} convertAmount={convertAmount} teamTotalRaised={teamTotalRaised} successColor={config.successColor} backgroundColor={config.backgroundColor} hexToRgba={hexToRgba} teamName={teamName} t={t} />}
+            {(overlayType === 'team' || overlayType === 'team-header') && (
+              <TeamHeaderOverlay
+                styles={styles}
+                currencyPrefix={currencyPrefix}
+                convertAmount={convertAmount}
+                teamTotalRaised={teamTotalRaised}
+                teamGoal={teamGoal}
+                teamName={teamName}
+                teamDonationsCount={teamDonations.length}
+                config={config}
+                effHeaderColor={effHeaderColor}
+                effSecondaryTextColor={effSecondaryTextColor}
+                effProgressBarColor={effProgressBarColor}
+                effProgressBarBgColor={effProgressBarBgColor}
+                effProgressBarTextColor={effProgressBarTextColor}
+                effProgressBarBorderColor={effProgressBarBorderColor}
+                hexToRgba={hexToRgba}
+                t={t}
+              />
+            )}
+            {overlayType === 'team-donations' && (
+              <TeamDonationsOverlay
+                styles={styles}
+                currencyPrefix={currencyPrefix}
+                convertAmount={convertAmount}
+                teamTotalRaised={teamTotalRaised}
+                teamName={teamName}
+                teamDonations={teamDonations}
+                config={config}
+                effHeaderColor={effHeaderColor}
+                effSecondaryTextColor={effSecondaryTextColor}
+                effDividerColor={effDividerColor}
+                effHighlightColor={effHighlightColor}
+                effDonorNameColor={effDonorNameColor}
+                hexToRgba={hexToRgba}
+                t={t}
+              />
+            )}
             {overlayType === 'team-dashboard' && (
               <TeamDashboardView
                 styles={styles}
