@@ -110,7 +110,9 @@ export const HeaderBar = ({
   handleChangeId,
   dashboardView,
   setDashboardView,
-  t
+  t,
+  twitchStatus,
+  twitchStatusMessage
 }) => {
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: styles.header
@@ -140,7 +142,24 @@ export const HeaderBar = ({
       color: config.successColor,
       opacity: 0.7
     }
-  }, "● ", t('connected')), lastFetchedAt && /*#__PURE__*/React.createElement("span", {
+  }, "● ", t('connected')), config?.twitchEnabled && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.5em',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '5px',
+      padding: '2px 8px',
+      borderRadius: '4px',
+      backgroundColor: twitchStatus === 'connected' ? 'rgba(145, 70, 255, 0.15)' : twitchStatus === 'error' ? 'rgba(239, 68, 68, 0.15)' : twitchStatus === 'connecting' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+      border: `1px solid ${twitchStatus === 'connected' ? 'rgba(145, 70, 255, 0.5)' : twitchStatus === 'error' ? config.errorColor : twitchStatus === 'connecting' ? '#f59e0b' : 'rgba(255, 255, 255, 0.1)'}`,
+      color: twitchStatus === 'connected' ? '#bf94ff' : twitchStatus === 'error' ? config.errorColor : twitchStatus === 'connecting' ? '#f59e0b' : effSecondaryTextColor
+    },
+    title: twitchStatusMessage || ''
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: twitchStatus === 'connected' ? config.successColor : twitchStatus === 'error' ? config.errorColor : twitchStatus === 'connecting' ? '#f59e0b' : effSecondaryTextColor
+    }
+  }, "●"), t('twitchBadgeLabel'), ": ", twitchStatus === 'connected' ? config.twitchChannel ? `#${config.twitchChannel}` : t('twitchStatusConnected') : twitchStatus === 'connecting' ? t('twitchStatusConnecting') : twitchStatus === 'error' ? t('twitchStatusErrorDesc') : t('twitchStatusDisconnected')), lastFetchedAt && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: '0.45em',
       color: config.textColor,
@@ -1611,7 +1630,16 @@ export const TwitchSection = ({
   effSecondaryTextColor,
   effPrimaryButtonBgColor,
   effDividerColor,
-  t
+  t,
+  twitchStatus,
+  twitchStatusMessage,
+  twitchLastActivity,
+  twitchCommandsHandled,
+  twitchAlertsSent,
+  sendTwitchTestMessage,
+  twitchTestResult,
+  isTwitchTesting,
+  reconnectTwitch
 }) => {
   return /*#__PURE__*/React.createElement(CollapsibleSection, {
     title: t('twitchIntegration'),
@@ -1622,7 +1650,7 @@ export const TwitchSection = ({
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
-      marginBottom: '20px',
+      marginBottom: '15px',
       borderBottom: `1px dashed ${effDividerColor}`,
       paddingBottom: '10px'
     }
@@ -1640,6 +1668,144 @@ export const TwitchSection = ({
       fontWeight: 'bold'
     }
   }, t('twitchEnabled'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      backgroundColor: 'rgba(145, 70, 255, 0.05)',
+      border: `1px solid ${twitchStatus === 'connected' ? config.successColor : twitchStatus === 'error' ? config.errorColor : twitchStatus === 'connecting' ? '#f59e0b' : effDividerColor}`,
+      borderRadius: '8px',
+      padding: '14px 16px',
+      marginBottom: '20px',
+      textAlign: 'left'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: '10px',
+      marginBottom: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.1rem'
+    }
+  }, "🟣"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 'bold',
+      fontSize: '0.95rem',
+      color: config.textColor
+    }
+  }, t('twitchStatus'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '3px 10px',
+      borderRadius: '12px',
+      fontSize: '0.75rem',
+      fontWeight: 'bold',
+      backgroundColor: twitchStatus === 'connected' ? 'rgba(34, 197, 94, 0.15)' : twitchStatus === 'connecting' ? 'rgba(245, 158, 11, 0.15)' : twitchStatus === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(156, 163, 175, 0.15)',
+      color: twitchStatus === 'connected' ? config.successColor : twitchStatus === 'connecting' ? '#f59e0b' : twitchStatus === 'error' ? config.errorColor : effSecondaryTextColor,
+      border: `1px solid ${twitchStatus === 'connected' ? config.successColor : twitchStatus === 'connecting' ? '#f59e0b' : twitchStatus === 'error' ? config.errorColor : 'rgba(156, 163, 175, 0.3)'}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'inline-block',
+      width: '8px',
+      height: '8px',
+      borderRadius: '50%',
+      backgroundColor: twitchStatus === 'connected' ? config.successColor : twitchStatus === 'connecting' ? '#f59e0b' : twitchStatus === 'error' ? config.errorColor : '#9ca3af'
+    }
+  }), twitchStatus === 'connected' && t('twitchStatusConnected'), twitchStatus === 'connecting' && t('twitchStatusConnecting'), twitchStatus === 'error' && t('twitchStatusErrorDesc'), twitchStatus === 'disconnected' && (!config.twitchChannel || !config.twitchToken ? t('twitchStatusConfigRequired') : t('twitchStatusDisconnected')), twitchStatus === 'disabled' && t('twitchStatusDisabled'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.8rem',
+      color: effSecondaryTextColor,
+      lineHeight: 1.5
+    }
+  }, twitchStatus === 'connected' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: config.textColor
+    }
+  }, t('twitchStatusConnectedDesc', {
+    channel: config.twitchChannel ? config.twitchChannel.replace(/^#/, '') : ''
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '15px',
+      marginTop: '6px',
+      fontSize: '0.75rem',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "🎯 ", t('twitchCommandsHandled'), ": ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: effHighlightColor
+    }
+  }, twitchCommandsHandled || 0)), /*#__PURE__*/React.createElement("span", null, "📢 ", t('twitchAlertsSent'), ": ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: effHighlightColor
+    }
+  }, twitchAlertsSent || 0)), twitchLastActivity && /*#__PURE__*/React.createElement("span", {
+    style: {
+      opacity: 0.85
+    }
+  }, "⏱ ", t('twitchLastActivity'), ": ", /*#__PURE__*/React.createElement("em", null, twitchLastActivity)))), twitchStatus === 'connecting' && /*#__PURE__*/React.createElement("div", null, t('twitchStatusConnecting')), twitchStatus === 'error' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: config.errorColor
+    }
+  }, "⚠️ ", twitchStatusMessage || 'Connection failed. Please check your OAuth token and channel name.'), twitchStatus === 'disconnected' && /*#__PURE__*/React.createElement("div", null, !config.twitchChannel || !config.twitchToken ? t('twitchStatusMissingConfigDesc') : twitchStatusMessage || t('twitchStatusDisconnected')), twitchStatus === 'disabled' && /*#__PURE__*/React.createElement("div", null, t('twitchStatusDisabled'), " - ", t('twitchEnabled'))), config.twitchEnabled && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      marginTop: '12px',
+      borderTop: `1px solid ${effDividerColor}`,
+      paddingTop: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: sendTwitchTestMessage,
+    disabled: isTwitchTesting || twitchStatus !== 'connected',
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '6px 14px',
+      fontSize: '0.75rem',
+      backgroundColor: twitchStatus === 'connected' ? effPrimaryButtonBgColor : 'rgba(255,255,255,0.08)',
+      color: twitchStatus === 'connected' ? config.buttonTextColor : effSecondaryTextColor,
+      cursor: twitchStatus === 'connected' && !isTwitchTesting ? 'pointer' : 'not-allowed',
+      opacity: twitchStatus === 'connected' && !isTwitchTesting ? 1 : 0.6
+    },
+    title: twitchStatus !== 'connected' ? 'Must be connected to Twitch to send test message' : ''
+  }, isTwitchTesting ? `⏳ ${t('twitchTesting')}` : `💬 ${t('twitchTestButton')}`), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: reconnectTwitch,
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '6px 14px',
+      fontSize: '0.75rem',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+      color: config.textColor,
+      border: `1px solid ${effDividerColor}`
+    }
+  }, "🔄 ", t('twitchReconnect'))), twitchTestResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '10px',
+      padding: '8px 12px',
+      borderRadius: '4px',
+      fontSize: '0.75rem',
+      backgroundColor: twitchTestResult.success ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+      color: twitchTestResult.success ? config.successColor : config.errorColor,
+      border: `1px solid ${twitchTestResult.success ? config.successColor : config.errorColor}`
+    }
+  }, twitchTestResult.success ? '✅ ' : '❌ ', twitchTestResult.message)), /*#__PURE__*/React.createElement("div", {
     style: {
       opacity: config.twitchEnabled ? 1 : 0.5,
       pointerEvents: config.twitchEnabled ? 'auto' : 'none',

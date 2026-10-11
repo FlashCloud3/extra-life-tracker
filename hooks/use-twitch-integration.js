@@ -21,6 +21,14 @@ export function useTwitchIntegration({
   t
 }) {
   const [pendingTwitchToken, setPendingTwitchToken] = useState(null);
+  const [twitchStatus, setTwitchStatus] = useState('disabled'); // 'connected' | 'connecting' | 'disconnected' | 'disabled' | 'error'
+  const [twitchStatusMessage, setTwitchStatusMessage] = useState('');
+  const [lastActivity, setLastActivity] = useState(null);
+  const [commandsHandledCount, setCommandsHandledCount] = useState(0);
+  const [alertsSentCount, setAlertsSentCount] = useState(0);
+  const [testResult, setTestResult] = useState(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const twitchClientRef = useRef(null);
 
   const totalRaisedRef = useRef(totalRaised);
@@ -66,7 +74,19 @@ export function useTwitchIntegration({
 
   // Client-side Twitch IRC Client via tmi.js
   useEffect(() => {
-    if (!config.twitchEnabled || !config.twitchChannel || !config.twitchToken) {
+    if (!config.twitchEnabled) {
+      setTwitchStatus('disabled');
+      setTwitchStatusMessage('');
+      if (twitchClientRef.current) {
+        try { twitchClientRef.current.disconnect(); } catch (e) {}
+        twitchClientRef.current = null;
+      }
+      return;
+    }
+
+    if (!config.twitchChannel || !config.twitchToken) {
+      setTwitchStatus('disconnected');
+      setTwitchStatusMessage(t ? t('twitchStatusMissingConfigDesc') : 'Channel name and OAuth token required');
       if (twitchClientRef.current) {
         try { twitchClientRef.current.disconnect(); } catch (e) {}
         twitchClientRef.current = null;
@@ -76,24 +96,75 @@ export function useTwitchIntegration({
 
     const tmiModule = tmi || (typeof window !== 'undefined' ? window.tmi : null);
     const ClientConstructor = tmiModule?.Client || tmiModule?.client || (typeof window !== 'undefined' ? window.tmi?.Client : null);
-    if (!ClientConstructor) return;
+    if (!ClientConstructor) {
+      setTwitchStatus('disconnected');
+      setTwitchStatusMessage('tmi.js IRC library not loaded');
+      return;
+    }
 
     let client = null;
+    let isSubscribed = true;
+    const cleanToken = config.twitchToken.startsWith('oauth:') ? config.twitchToken : `oauth:${config.twitchToken}`;
+    const cleanChannel = config.twitchChannel.trim().toLowerCase().replace(/^#/, '');
+
+    setTwitchStatus('connecting');
+    setTwitchStatusMessage(`Connecting to #${cleanChannel}...`);
+
     try {
-      const cleanToken = config.twitchToken.startsWith('oauth:') ? config.twitchToken : `oauth:${config.twitchToken}`;
       client = new ClientConstructor({
         options: { debug: false },
+        connection: {
+          reconnect: true,
+          maxReconnectAttempts: 5,
+          maxReconnectInterval: 30000
+        },
         identity: {
-          username: config.twitchChannel.toLowerCase(),
+          username: cleanChannel,
           password: cleanToken
         },
-        channels: [config.twitchChannel.toLowerCase()]
+        channels: [cleanChannel]
+      });
+
+      client.on('connected', () => {
+        if (!isSubscribed) return;
+        setTwitchStatus('connected');
+        setTwitchStatusMessage(`Connected to #${cleanChannel}`);
+        setLastActivity(`Connected to #${cleanChannel} at ${new Date().toLocaleTimeString()}`);
+      });
+
+      client.on('disconnected', (reason) => {
+        if (!isSubscribed) return;
+        setTwitchStatus('disconnected');
+        setTwitchStatusMessage(reason ? `Disconnected: ${reason}` : 'Disconnected');
+      });
+
+      client.on('reconnect', () => {
+        if (!isSubscribed) return;
+        setTwitchStatus('connecting');
+        setTwitchStatusMessage('Reconnecting...');
+      });
+
+      client.on('notice', (channel, msgid) => {
+        if (!isSubscribed) return;
+        if (msgid === 'login_unsuccessful') {
+          setTwitchStatus('error');
+          setTwitchStatusMessage(`Login failed: Invalid OAuth token for #${cleanChannel}`);
+        }
       });
 
       client.connect().then(() => {
-        console.log('Connected to Twitch channel:', config.twitchChannel);
+        if (!isSubscribed) return;
+        setTwitchStatus('connected');
+        setTwitchStatusMessage(`Connected to #${cleanChannel}`);
+        setLastActivity(`Connected to #${cleanChannel} at ${new Date().toLocaleTimeString()}`);
         twitchClientRef.current = client;
-      }).catch(console.error);
+      }).catch(err => {
+        if (!isSubscribed) return;
+        setTwitchStatus('error');
+        const errStr = typeof err === 'string' ? err : (err?.message || 'Connection failed');
+        setTwitchStatusMessage(errStr);
+        twitchClientRef.current = null;
+      });
 
       client.on('message', (channel, tags, message, self) => {
         if (self) return;
@@ -106,10 +177,14 @@ export function useTwitchIntegration({
         if (cleanMsg === '!total') {
           const amt = `${currencyPrefix}${convertAmount(totalRaisedRef.current).toFixed(2)}`;
           client.say(channel, `Total raised: ${amt} for Extra Life!`);
+          setCommandsHandledCount(prev => prev + 1);
+          setLastActivity(`Responded to !total in #${channel} (${new Date().toLocaleTimeString()})`);
         } else if (cleanMsg === '!goal') {
           // Built-in command: !goal
           const amt = `${currencyPrefix}${convertAmount(goalRef.current).toFixed(2)}`;
           client.say(channel, `Fundraising goal: ${amt}`);
+          setCommandsHandledCount(prev => prev + 1);
+          setLastActivity(`Responded to !goal in #${channel} (${new Date().toLocaleTimeString()})`);
         } else if (cleanMsg === '!milestone' || cleanMsg === '!next') {
           // Built-in command: !milestone
           const currentTotal = totalRaisedRef.current;
@@ -121,19 +196,26 @@ export function useTwitchIntegration({
           } else {
             client.say(channel, `All milestones completed or none configured!`);
           }
+          setCommandsHandledCount(prev => prev + 1);
+          setLastActivity(`Responded to !milestone in #${channel} (${new Date().toLocaleTimeString()})`);
         } else if (currentConf.customCommands && Array.isArray(currentConf.customCommands)) {
           // Custom commands
           const match = currentConf.customCommands.find(c => c.trigger.toLowerCase() === cleanMsg);
           if (match && match.response) {
             client.say(channel, match.response);
+            setCommandsHandledCount(prev => prev + 1);
+            setLastActivity(`Responded to ${match.trigger} in #${channel} (${new Date().toLocaleTimeString()})`);
           }
         }
       });
     } catch (e) {
       console.warn('Twitch client connection error:', e);
+      setTwitchStatus('error');
+      setTwitchStatusMessage(e?.message || 'Twitch client error');
     }
 
     return () => {
+      isSubscribed = false;
       try { client?.disconnect(); } catch (e) {}
       twitchClientRef.current = null;
     };
@@ -144,7 +226,9 @@ export function useTwitchIntegration({
     config.twitchEnableCommands,
     config.customCommands,
     currencyPrefix,
-    convertAmount
+    convertAmount,
+    reconnectTrigger,
+    t
   ]);
 
   const sendTwitchAlert = useCallback((donation, cRate = 1) => {
@@ -158,10 +242,61 @@ export function useTwitchIntegration({
           currentConf.twitchChannel,
           `🎉 New Extra Life Donation! ${donor} donated ${amt}!${msg} Thank you!`
         );
+        setAlertsSentCount(prev => prev + 1);
+        setLastActivity(`Sent donation alert for ${donor} (${amt}) (${new Date().toLocaleTimeString()})`);
       } catch (e) {
         console.warn('Twitch alert send failed:', e);
       }
     }
+  }, []);
+
+  const sendTwitchTestMessage = useCallback(async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    const client = twitchClientRef.current;
+    const channel = configRef.current?.twitchChannel?.trim().toLowerCase().replace(/^#/, '');
+
+    if (!configRef.current?.twitchEnabled) {
+      setIsTesting(false);
+      setTestResult({ success: false, message: t ? t('twitchStatusDisabled') : 'Twitch integration is disabled in settings.' });
+      return false;
+    }
+
+    if (!channel) {
+      setIsTesting(false);
+      setTestResult({ success: false, message: 'Channel name is missing.' });
+      return false;
+    }
+
+    if (!client || (client.readyState && client.readyState() !== 'OPEN')) {
+      setIsTesting(false);
+      setTestResult({ success: false, message: 'Twitch bot is not connected. Check your OAuth token and channel name.' });
+      return false;
+    }
+
+    try {
+      const timeStr = new Date().toLocaleTimeString();
+      await client.say(channel, `🎮 [Extra Life Tracker] Test message: Twitch integration is connected and working! (${timeStr})`);
+      setTestResult({
+        success: true,
+        message: t ? t('twitchTestSuccess', { channel }) : `Test message sent to #${channel} successfully!`
+      });
+      setLastActivity(`Sent test message to #${channel} at ${timeStr}`);
+      return true;
+    } catch (err) {
+      const errMsg = typeof err === 'string' ? err : (err?.message || 'Unknown error');
+      setTestResult({
+        success: false,
+        message: `${t ? t('twitchTestError') : 'Failed to send test message:'} ${errMsg}`
+      });
+      return false;
+    } finally {
+      setIsTesting(false);
+    }
+  }, [t]);
+
+  const reconnectTwitch = useCallback(() => {
+    setReconnectTrigger(prev => prev + 1);
   }, []);
 
   const handleGetTwitchToken = useCallback((currentProfile = 'default') => {
@@ -177,6 +312,15 @@ export function useTwitchIntegration({
     setPendingTwitchToken,
     twitchClientRef,
     sendTwitchAlert,
-    handleGetTwitchToken
+    handleGetTwitchToken,
+    twitchStatus,
+    twitchStatusMessage,
+    twitchLastActivity: lastActivity,
+    twitchCommandsHandled: commandsHandledCount,
+    twitchAlertsSent: alertsSentCount,
+    sendTwitchTestMessage,
+    twitchTestResult: testResult,
+    isTwitchTesting: isTesting,
+    reconnectTwitch
   };
 }

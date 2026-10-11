@@ -418,7 +418,16 @@ const App = () => {
     setPendingTwitchToken,
     twitchClientRef,
     sendTwitchAlert,
-    handleGetTwitchToken
+    handleGetTwitchToken,
+    twitchStatus,
+    twitchStatusMessage,
+    twitchLastActivity,
+    twitchCommandsHandled,
+    twitchAlertsSent,
+    sendTwitchTestMessage,
+    twitchTestResult,
+    isTwitchTesting,
+    reconnectTwitch
   } = useTwitchIntegration({
     config,
     totalRaised,
@@ -1021,6 +1030,8 @@ const App = () => {
               dashboardView={dashboardView}
               setDashboardView={setDashboardView}
               t={t}
+              twitchStatus={twitchStatus}
+              twitchStatusMessage={twitchStatusMessage}
             />
 
             {dashboardView === 'team' ? (
@@ -1193,6 +1204,15 @@ const App = () => {
                       effPrimaryButtonBgColor={effPrimaryButtonBgColor}
                       effDividerColor={effDividerColor}
                       t={t}
+                      twitchStatus={twitchStatus}
+                      twitchStatusMessage={twitchStatusMessage}
+                      twitchLastActivity={twitchLastActivity}
+                      twitchCommandsHandled={twitchCommandsHandled}
+                      twitchAlertsSent={twitchAlertsSent}
+                      sendTwitchTestMessage={sendTwitchTestMessage}
+                      twitchTestResult={twitchTestResult}
+                      isTwitchTesting={isTwitchTesting}
+                      reconnectTwitch={reconnectTwitch}
                     />
                     <EventTimingSection
                       styles={styles}

@@ -91,6 +91,8 @@ export interface HeaderBarProps {
   dashboardView: 'participant' | 'team' | 'settings';
   setDashboardView: (view: 'participant' | 'team' | 'settings') => void;
   t: (key: string, vars?: any) => string;
+  twitchStatus?: string;
+  twitchStatusMessage?: string;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -108,7 +110,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   handleChangeId,
   dashboardView,
   setDashboardView,
-  t
+  t,
+  twitchStatus,
+  twitchStatusMessage
 }) => {
   return (
     <>
@@ -123,6 +127,37 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <span style={{ fontSize: '0.5em', color: config.errorColor }}>{t('disconnected')}</span>
           ) : (
             <span style={{ fontSize: '0.5em', color: config.successColor, opacity: 0.7 }}>● {t('connected')}</span>
+          )}
+          {config?.twitchEnabled && (
+            <span
+              style={{
+                fontSize: '0.5em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                backgroundColor: twitchStatus === 'connected' ? 'rgba(145, 70, 255, 0.15)' :
+                  twitchStatus === 'error' ? 'rgba(239, 68, 68, 0.15)' :
+                  twitchStatus === 'connecting' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: `1px solid ${twitchStatus === 'connected' ? 'rgba(145, 70, 255, 0.5)' :
+                  twitchStatus === 'error' ? config.errorColor :
+                  twitchStatus === 'connecting' ? '#f59e0b' : 'rgba(255, 255, 255, 0.1)'}`,
+                color: twitchStatus === 'connected' ? '#bf94ff' :
+                  twitchStatus === 'error' ? config.errorColor :
+                  twitchStatus === 'connecting' ? '#f59e0b' : effSecondaryTextColor
+              }}
+              title={twitchStatusMessage || ''}
+            >
+              <span style={{
+                color: twitchStatus === 'connected' ? config.successColor :
+                  twitchStatus === 'error' ? config.errorColor :
+                  twitchStatus === 'connecting' ? '#f59e0b' : effSecondaryTextColor
+              }}>●</span>
+              {t('twitchBadgeLabel')}: {twitchStatus === 'connected' ? (config.twitchChannel ? `#${config.twitchChannel}` : t('twitchStatusConnected')) :
+                twitchStatus === 'connecting' ? t('twitchStatusConnecting') :
+                twitchStatus === 'error' ? t('twitchStatusErrorDesc') : t('twitchStatusDisconnected')}
+            </span>
           )}
           {lastFetchedAt && (
             <span style={{ fontSize: '0.45em', color: config.textColor, opacity: 0.75, fontFamily: 'monospace' }}>
@@ -1260,6 +1295,15 @@ export interface TwitchSectionProps {
   effPrimaryButtonBgColor: string;
   effDividerColor: string;
   t: (key: string, vars?: any) => string;
+  twitchStatus?: string;
+  twitchStatusMessage?: string;
+  twitchLastActivity?: string | null;
+  twitchCommandsHandled?: number;
+  twitchAlertsSent?: number;
+  sendTwitchTestMessage?: () => void;
+  twitchTestResult?: { success: boolean; message: string } | null;
+  isTwitchTesting?: boolean;
+  reconnectTwitch?: () => void;
 }
 
 export const TwitchSection: React.FC<TwitchSectionProps> = ({
@@ -1278,17 +1322,170 @@ export const TwitchSection: React.FC<TwitchSectionProps> = ({
   effSecondaryTextColor,
   effPrimaryButtonBgColor,
   effDividerColor,
-  t
+  t,
+  twitchStatus,
+  twitchStatusMessage,
+  twitchLastActivity,
+  twitchCommandsHandled,
+  twitchAlertsSent,
+  sendTwitchTestMessage,
+  twitchTestResult,
+  isTwitchTesting,
+  reconnectTwitch
 }) => {
   return (
     <CollapsibleSection title={t('twitchIntegration')} isInitiallyCollapsed={true} styles={styles}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: `1px dashed ${effDividerColor}`, paddingBottom: '10px' }}>
         <input
           type="checkbox"
           checked={config.twitchEnabled}
           onChange={e => updateConfig({ twitchEnabled: e.target.checked })}
         />
         <label style={{ ...styles.label, opacity: 1, cursor: 'pointer', fontWeight: 'bold' }}>{t('twitchEnabled')}</label>
+      </div>
+
+      {/* LIVE TWITCH STATUS CARD */}
+      <div style={{
+        backgroundColor: 'rgba(145, 70, 255, 0.05)',
+        border: `1px solid ${twitchStatus === 'connected' ? config.successColor : twitchStatus === 'error' ? config.errorColor : twitchStatus === 'connecting' ? '#f59e0b' : effDividerColor}`,
+        borderRadius: '8px',
+        padding: '14px 16px',
+        marginBottom: '20px',
+        textAlign: 'left'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.1rem' }}>🟣</span>
+            <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: config.textColor }}>{t('twitchStatus')}</span>
+          </div>
+
+          {/* STATUS PILL */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '3px 10px',
+            borderRadius: '12px',
+            fontSize: '0.75rem',
+            fontWeight: 'bold',
+            backgroundColor: twitchStatus === 'connected' ? 'rgba(34, 197, 94, 0.15)' :
+              twitchStatus === 'connecting' ? 'rgba(245, 158, 11, 0.15)' :
+              twitchStatus === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(156, 163, 175, 0.15)',
+            color: twitchStatus === 'connected' ? config.successColor :
+              twitchStatus === 'connecting' ? '#f59e0b' :
+              twitchStatus === 'error' ? config.errorColor : effSecondaryTextColor,
+            border: `1px solid ${twitchStatus === 'connected' ? config.successColor :
+              twitchStatus === 'connecting' ? '#f59e0b' :
+              twitchStatus === 'error' ? config.errorColor : 'rgba(156, 163, 175, 0.3)'}`
+          }}>
+            <span style={{
+              display: 'inline-block',
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: twitchStatus === 'connected' ? config.successColor :
+                twitchStatus === 'connecting' ? '#f59e0b' :
+                twitchStatus === 'error' ? config.errorColor : '#9ca3af'
+            }} />
+            {twitchStatus === 'connected' && t('twitchStatusConnected')}
+            {twitchStatus === 'connecting' && t('twitchStatusConnecting')}
+            {twitchStatus === 'error' && t('twitchStatusErrorDesc')}
+            {twitchStatus === 'disconnected' && (!config.twitchChannel || !config.twitchToken ? t('twitchStatusConfigRequired') : t('twitchStatusDisconnected'))}
+            {twitchStatus === 'disabled' && t('twitchStatusDisabled')}
+          </div>
+        </div>
+
+        {/* STATUS DESCRIPTION & STATS */}
+        <div style={{ fontSize: '0.8rem', color: effSecondaryTextColor, lineHeight: 1.5 }}>
+          {twitchStatus === 'connected' && (
+            <div>
+              <span style={{ color: config.textColor }}>
+                {t('twitchStatusConnectedDesc', { channel: config.twitchChannel ? config.twitchChannel.replace(/^#/, '') : '' })}
+              </span>
+              <div style={{ display: 'flex', gap: '15px', marginTop: '6px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                <span>🎯 {t('twitchCommandsHandled')}: <strong style={{ color: effHighlightColor }}>{twitchCommandsHandled || 0}</strong></span>
+                <span>📢 {t('twitchAlertsSent')}: <strong style={{ color: effHighlightColor }}>{twitchAlertsSent || 0}</strong></span>
+                {twitchLastActivity && (
+                  <span style={{ opacity: 0.85 }}>⏱ {t('twitchLastActivity')}: <em>{twitchLastActivity}</em></span>
+                )}
+              </div>
+            </div>
+          )}
+          {twitchStatus === 'connecting' && (
+            <div>{t('twitchStatusConnecting')}</div>
+          )}
+          {twitchStatus === 'error' && (
+            <div style={{ color: config.errorColor }}>
+              ⚠️ {twitchStatusMessage || 'Connection failed. Please check your OAuth token and channel name.'}
+            </div>
+          )}
+          {twitchStatus === 'disconnected' && (
+            <div>
+              {!config.twitchChannel || !config.twitchToken
+                ? t('twitchStatusMissingConfigDesc')
+                : (twitchStatusMessage || t('twitchStatusDisconnected'))}
+            </div>
+          )}
+          {twitchStatus === 'disabled' && (
+            <div>{t('twitchStatusDisabled')} - {t('twitchEnabled')}</div>
+          )}
+        </div>
+
+        {/* INTERACTION BUTTONS */}
+        {config.twitchEnabled && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px', borderTop: `1px solid ${effDividerColor}`, paddingTop: '10px' }}>
+            <button
+              type="button"
+              onClick={sendTwitchTestMessage}
+              disabled={isTwitchTesting || twitchStatus !== 'connected'}
+              style={{
+                ...styles.button,
+                margin: 0,
+                padding: '6px 14px',
+                fontSize: '0.75rem',
+                backgroundColor: twitchStatus === 'connected' ? effPrimaryButtonBgColor : 'rgba(255,255,255,0.08)',
+                color: twitchStatus === 'connected' ? config.buttonTextColor : effSecondaryTextColor,
+                cursor: (twitchStatus === 'connected' && !isTwitchTesting) ? 'pointer' : 'not-allowed',
+                opacity: (twitchStatus === 'connected' && !isTwitchTesting) ? 1 : 0.6
+              }}
+              title={twitchStatus !== 'connected' ? 'Must be connected to Twitch to send test message' : ''}
+            >
+              {isTwitchTesting ? `⏳ ${t('twitchTesting')}` : `💬 ${t('twitchTestButton')}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={reconnectTwitch}
+              style={{
+                ...styles.button,
+                margin: 0,
+                padding: '6px 14px',
+                fontSize: '0.75rem',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                color: config.textColor,
+                border: `1px solid ${effDividerColor}`
+              }}
+            >
+              🔄 {t('twitchReconnect')}
+            </button>
+          </div>
+        )}
+
+        {/* TEST MESSAGE FEEDBACK */}
+        {twitchTestResult && (
+          <div style={{
+            marginTop: '10px',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '0.75rem',
+            backgroundColor: twitchTestResult.success ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            color: twitchTestResult.success ? config.successColor : config.errorColor,
+            border: `1px solid ${twitchTestResult.success ? config.successColor : config.errorColor}`
+          }}>
+            {twitchTestResult.success ? '✅ ' : '❌ '}
+            {twitchTestResult.message}
+          </div>
+        )}
       </div>
 
       <div style={{ opacity: config.twitchEnabled ? 1 : 0.5, pointerEvents: config.twitchEnabled ? 'auto' : 'none', transition: 'opacity 0.3s' }}>

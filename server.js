@@ -345,6 +345,7 @@ class Profile {
         this.pollingInterval = null;
         this.initialFetchComplete = false;
         this.twitchClient = null;
+        this.twitchStatus = { state: 'disabled', channel: null, error: null };
     }
 }
 
@@ -411,10 +412,20 @@ export async function setupProfileTwitchClient(profile) {
     }
 
     if (!profile.config.twitchEnabled) {
+        profile.twitchStatus = { state: 'disabled', channel: null, error: null };
+        io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
+        return;
+    }
+
+    if (!profile.config.twitchToken || !profile.config.twitchChannel) {
+        profile.twitchStatus = { state: 'disconnected', channel: profile.config.twitchChannel || null, error: 'Missing channel or token' };
+        io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         return;
     }
 
     if (profile.config.twitchToken && profile.config.twitchChannel) {
+        profile.twitchStatus = { state: 'connecting', channel: profile.config.twitchChannel, error: null };
+        io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         console.log(`[${profile.id}] Initializing Twitch connection...`);
         const client = new tmi.Client({
             options: { debug: false },
@@ -462,8 +473,12 @@ export async function setupProfileTwitchClient(profile) {
             await client.connect();
             console.log(`[${profile.id}] Connected to Twitch Channel: ${profile.config.twitchChannel}`);
             profile.twitchClient = client;
+            profile.twitchStatus = { state: 'connected', channel: profile.config.twitchChannel, error: null };
+            io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         } catch (e) {
             console.error(`[${profile.id}] Failed to connect to Twitch:`, e);
+            profile.twitchStatus = { state: 'error', channel: profile.config.twitchChannel, error: e.message || String(e) };
+            io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         }
     }
 }
@@ -678,7 +693,7 @@ io.on('connection', (socket) => {
         const profile = await getOrCreateProfile(profileId);
         
         // Send initial state
-        socket.emit('init-state', { config: profile.config, data: profile.data, profileId });
+        socket.emit('init-state', { config: profile.config, data: profile.data, profileId, twitchStatus: profile.twitchStatus || { state: 'disabled' } });
     });
 
     socket.on('update-config', async ({ profileId, config: newConfig }) => {

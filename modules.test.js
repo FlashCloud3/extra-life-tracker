@@ -327,5 +327,53 @@ describe('Modular Core Utilities & Config', () => {
       expect(content).toContain("<CoreSetupSection");
       expect(content).toContain("<ThemingSection");
     });
+
+    test('Twitch status localization keys exist in both English and French', async () => {
+      const { translations } = await import('./translations.js');
+      const keys = [
+        'twitchStatus',
+        'twitchStatusConnected',
+        'twitchStatusConnecting',
+        'twitchStatusDisconnected',
+        'twitchStatusDisabled',
+        'twitchStatusConfigRequired',
+        'twitchTestButton',
+        'twitchReconnect',
+        'twitchCommandsHandled',
+        'twitchAlertsSent'
+      ];
+      for (const k of keys) {
+        expect(translations.en[k]).toBeDefined();
+        expect(translations.fr[k]).toBeDefined();
+      }
+    });
+
+    test('TwitchSection component accepts twitchStatus and renders status card', async () => {
+      const { TwitchSection } = await import('./dashboard-panels.js');
+      const el = TwitchSection({
+        styles: { label: {}, input: {}, button: {}, soundItem: {}, soundButton: {} },
+        config: { twitchEnabled: true, twitchChannel: 'charitystreamer', twitchToken: 'oauth:test', customCommands: [] },
+        updateConfig: () => {},
+        commandTrigger: '!discord',
+        setCommandTrigger: () => {},
+        commandResponse: 'Join us!',
+        setCommandResponse: () => {},
+        handleAddCommand: () => {},
+        handleDeleteCommand: () => {},
+        handleGetTwitchToken: () => {},
+        effHighlightColor: '#00ffff',
+        effHeaderColor: '#ffffff',
+        effSecondaryTextColor: '#aaaaaa',
+        effPrimaryButtonBgColor: '#0088ff',
+        effDividerColor: '#333333',
+        t: (k, vars) => (vars?.channel ? `${k}: ${vars.channel}` : k),
+        twitchStatus: 'connected',
+        twitchStatusMessage: 'Connected to #charitystreamer',
+        twitchCommandsHandled: 5,
+        twitchAlertsSent: 3
+      });
+      expect(el).toBeTruthy();
+      expect(el.type).toBeDefined();
+    });
   });
 });
