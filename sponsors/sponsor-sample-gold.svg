@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150" width="400" height="150">
+  <defs>
+    <linearGradient id="bgGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="goldText" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="50%" stop-color="#FCD34D" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+  <rect width="396" height="146" x="2" y="2" rx="14" fill="url(#bgGold)" stroke="url(#goldBorder)" stroke-width="2.5" />
+  <!-- Emblem: Shield + Star -->
+  <g transform="translate(28, 30)">
+    <path d="M 45 5 L 80 20 L 80 55 C 80 75 45 88 45 88 C 45 88 10 75 10 55 L 10 20 Z" fill="#F59E0B" fill-opacity="0.18" stroke="#F59E0B" stroke-width="2.5" stroke-linejoin="round" />
+    <path d="M 45 25 L 50 37 L 63 38 L 53 47 L 56 60 L 45 53 L 34 60 L 37 47 L 27 38 L 40 37 Z" fill="#FCD34D" />
+  </g>
+  <!-- Text Block -->
+  <text x="135" y="62" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="url(#goldText)" letter-spacing="1">AURORA TECH</text>
+  <text x="135" y="86" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#94A3B8" letter-spacing="2">OFFICIAL GOLD SPONSOR</text>
+  <rect x="135" y="98" width="90" height="3" rx="1.5" fill="#F59E0B" fill-opacity="0.6" />
+</svg>

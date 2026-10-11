@@ -64,7 +64,7 @@
       "language": "en",
       "twitchEnabled": true,
       "twitchChannel": "flashcloud",
-      "twitchToken": "kp59hwgkiqrl7zntjotsnfovrmauoz",
+      "twitchToken": "",
       "twitchEnableAlerts": true,
       "twitchEnableCommands": true,
       "customCommands": [],

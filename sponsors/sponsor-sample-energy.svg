@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150" width="400" height="150">
+  <defs>
+    <linearGradient id="bgEnergy" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#022c22" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+    <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="50%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="energyBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+  <rect width="396" height="146" x="2" y="2" rx="14" fill="url(#bgEnergy)" stroke="url(#energyBorder)" stroke-width="2.5" />
+  <!-- Emblem: Lightning Bolt -->
+  <g transform="translate(38, 30)">
+    <circle cx="35" cy="45" r="32" fill="#047857" fill-opacity="0.3" stroke="#34D399" stroke-width="2" />
+    <path d="M 38 18 L 22 45 L 34 45 L 30 72 L 48 43 L 36 43 Z" fill="#34D399" stroke="#A7F3D0" stroke-width="1.5" stroke-linejoin="round" />
+  </g>
+  <!-- Text Block -->
+  <text x="135" y="62" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="24" font-weight="900" fill="url(#neonGradient)" letter-spacing="1">PULSE ENERGY</text>
+  <text x="135" y="86" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#6EE7B7" letter-spacing="2">OFFICIAL ENERGY PARTNER</text>
+  <rect x="135" y="98" width="90" height="3" rx="1.5" fill="#34D399" fill-opacity="0.7" />
+</svg>
