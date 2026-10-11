@@ -705,7 +705,7 @@ export const CoreSetupSection = ({
   };
   return /*#__PURE__*/React.createElement(CollapsibleSection, {
     title: t('coreSetup'),
-    isInitiallyCollapsed: false,
+    isInitiallyCollapsed: true,
     styles: styles
   }, /*#__PURE__*/React.createElement("label", {
     style: styles.label
@@ -1026,7 +1026,7 @@ export const QrCodeSection = ({
 }) => {
   return /*#__PURE__*/React.createElement(CollapsibleSection, {
     title: t('qrCodeSection'),
-    isInitiallyCollapsed: false,
+    isInitiallyCollapsed: true,
     styles: styles
   }, /*#__PURE__*/React.createElement("p", {
     style: {

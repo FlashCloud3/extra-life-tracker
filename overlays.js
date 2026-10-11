@@ -1908,7 +1908,7 @@ const QRCodeOverlay = ({
 const CollapsibleSection = ({
   title,
   children,
-  isInitiallyCollapsed = false,
+  isInitiallyCollapsed = true,
   styles
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);

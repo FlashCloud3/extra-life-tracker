@@ -185,6 +185,7 @@ const App = () => {
   const [dashboardView, setDashboardView] = useState<'participant' | 'team'>('participant');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'campaign' | 'appearance' | 'alerts' | 'integrations'>('campaign');
   const [formError, setFormError] = useState('');
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
@@ -1210,6 +1211,54 @@ const App = () => {
                          </button>
                          {!isSettingsCollapsed && (
                          <form onSubmit={handleIdSubmit} style={{...styles.form, marginTop: '1rem', gap: 0, border: 'none', padding: 0}}>
+                             {/* SETTINGS CATEGORY TABS */}
+                             <div style={{
+                               display: 'grid',
+                               gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                               gap: '8px',
+                               marginBottom: '1.25rem',
+                               width: '100%'
+                             }}>
+                               {[
+                                 { id: 'campaign', label: t('settingsTabCampaign'), icon: '🎯' },
+                                 { id: 'appearance', label: t('settingsTabAppearance'), icon: '🎨' },
+                                 { id: 'alerts', label: t('settingsTabAlerts'), icon: '🔔' },
+                                 { id: 'integrations', label: t('settingsTabIntegrations'), icon: '🔌' },
+                               ].map(tab => {
+                                 const isActive = activeSettingsTab === tab.id;
+                                 return (
+                                   <button
+                                     key={tab.id}
+                                     type="button"
+                                     onClick={() => setActiveSettingsTab(tab.id as any)}
+                                     style={{
+                                       ...styles.button,
+                                       margin: 0,
+                                       padding: '10px 8px',
+                                       fontSize: '0.8rem',
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       justifyContent: 'center',
+                                       gap: '6px',
+                                       backgroundColor: isActive ? effPrimaryButtonBgColor : hexToRgba(config.panelColor || '#1a1a1a', 0.8),
+                                       color: isActive ? config.buttonTextColor : config.textColor,
+                                       border: `1px solid ${isActive ? effPrimaryButtonBgColor : hexToRgba(config.panelBorderColor || '#00ffff', 0.35)}`,
+                                       borderRadius: '4px',
+                                       cursor: 'pointer',
+                                       transition: 'all 0.2s ease',
+                                       boxShadow: isActive ? `0 0 10px ${hexToRgba(effPrimaryButtonBgColor, 0.4)}` : 'none'
+                                     }}
+                                   >
+                                     <span>{tab.icon}</span>
+                                     <span style={{ fontWeight: isActive ? 'bold' : 'normal', whiteSpace: 'nowrap' }}>{tab.label}</span>
+                                   </button>
+                                 );
+                               })}
+                             </div>
+
+                             {/* TAB 1: CAMPAIGN */}
+                             {activeSettingsTab === 'campaign' && (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
                              <CoreSetupSection
                                styles={styles}
                                config={config}
@@ -1233,60 +1282,18 @@ const App = () => {
                                hexToRgba={hexToRgba}
                                t={t}
                              />
-                             <QrCodeSection
-                               styles={styles}
-                               config={config}
-                               updateConfig={updateConfig}
-                               effectiveQrUrl={effectiveQrUrl}
-                               activeParticipantId={activeParticipantId}
-                               copyFeedback={copyFeedback}
-                               effHighlightColor={effHighlightColor}
-                               effHeaderColor={effHeaderColor}
-                               effSecondaryTextColor={effSecondaryTextColor}
-                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
-                               effSecondaryButtonBgColor={effSecondaryButtonBgColor}
-                               hexToRgba={hexToRgba}
-                               onCopyQrLink={handleCopyQrLink}
-                               openOverlay={openOverlay}
-                               t={t}
-                             />
-                             <TwitchSection
-                               styles={styles}
-                               config={config}
-                               updateConfig={updateConfig}
-                               commandTrigger={commandTrigger}
-                               setCommandTrigger={setCommandTrigger}
-                               commandResponse={commandResponse}
-                               setCommandResponse={setCommandResponse}
-                               handleAddCommand={handleAddCommand}
-                               handleDeleteCommand={handleDeleteCommand}
-                               handleGetTwitchToken={handleGetTwitchToken}
-                               effHighlightColor={effHighlightColor}
-                               effHeaderColor={effHeaderColor}
-                               effSecondaryTextColor={effSecondaryTextColor}
-                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
-                               effDividerColor={effDividerColor}
-                               t={t}
-                             />
                              <EventTimingSection
                                styles={styles}
                                config={config}
                                updateConfig={updateConfig}
                                t={t}
                              />
-                             <ScheduleSection
-                               styles={styles}
-                               config={config}
-                               schedTime={schedTime}
-                               setSchedTime={setSchedTime}
-                               schedDesc={schedDesc}
-                               setSchedDesc={setSchedDesc}
-                               handleAddScheduleItem={handleAddScheduleItem}
-                               handleToggleItem={handleToggleItem}
-                               handleDeleteItem={handleDeleteItem}
-                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
-                               t={t}
-                             />
+                             </div>
+                             )}
+
+                             {/* TAB 2: APPEARANCE */}
+                             {activeSettingsTab === 'appearance' && (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
                              <ThemingSection
                                styles={styles}
                                config={config}
@@ -1330,6 +1337,29 @@ const App = () => {
                                hexToRgba={hexToRgba}
                                t={t}
                              />
+                             <QrCodeSection
+                               styles={styles}
+                               config={config}
+                               updateConfig={updateConfig}
+                               effectiveQrUrl={effectiveQrUrl}
+                               activeParticipantId={activeParticipantId}
+                               copyFeedback={copyFeedback}
+                               effHighlightColor={effHighlightColor}
+                               effHeaderColor={effHeaderColor}
+                               effSecondaryTextColor={effSecondaryTextColor}
+                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                               effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                               hexToRgba={hexToRgba}
+                               onCopyQrLink={handleCopyQrLink}
+                               openOverlay={openOverlay}
+                               t={t}
+                             />
+                             </div>
+                             )}
+
+                             {/* TAB 3: ALERTS & AUDIO */}
+                             {activeSettingsTab === 'alerts' && (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
                              <SoundSettingsSection
                                styles={styles}
                                config={config}
@@ -1345,6 +1375,43 @@ const App = () => {
                                formError={formError}
                                effPrimaryButtonBgColor={effPrimaryButtonBgColor}
                                effDividerColor={effDividerColor}
+                               t={t}
+                             />
+                             </div>
+                             )}
+
+                             {/* TAB 4: INTEGRATIONS & STREAM TOOLS */}
+                             {activeSettingsTab === 'integrations' && (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+                             <TwitchSection
+                               styles={styles}
+                               config={config}
+                               updateConfig={updateConfig}
+                               commandTrigger={commandTrigger}
+                               setCommandTrigger={setCommandTrigger}
+                               commandResponse={commandResponse}
+                               setCommandResponse={setCommandResponse}
+                               handleAddCommand={handleAddCommand}
+                               handleDeleteCommand={handleDeleteCommand}
+                               handleGetTwitchToken={handleGetTwitchToken}
+                               effHighlightColor={effHighlightColor}
+                               effHeaderColor={effHeaderColor}
+                               effSecondaryTextColor={effSecondaryTextColor}
+                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                               effDividerColor={effDividerColor}
+                               t={t}
+                             />
+                             <ScheduleSection
+                               styles={styles}
+                               config={config}
+                               schedTime={schedTime}
+                               setSchedTime={setSchedTime}
+                               schedDesc={schedDesc}
+                               setSchedDesc={setSchedDesc}
+                               handleAddScheduleItem={handleAddScheduleItem}
+                               handleToggleItem={handleToggleItem}
+                               handleDeleteItem={handleDeleteItem}
+                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
                                t={t}
                              />
                              <SponsorsSection
@@ -1382,6 +1449,9 @@ const App = () => {
                                effSecondaryButtonBgColor={effSecondaryButtonBgColor}
                                t={t}
                              />
+                             </div>
+                             )}
+
                              <button type="submit" style={{...styles.button, backgroundColor: config.successColor, color: config.buttonTextColor, marginTop: '2rem', width: '100%' }}>
                                {isSaving ? t('saving') : t('saveSettings')}
                              </button>

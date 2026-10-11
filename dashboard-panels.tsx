@@ -611,7 +611,7 @@ export const CoreSetupSection: React.FC<CoreSetupSectionProps> = ({
   };
 
   return (
-    <CollapsibleSection title={t('coreSetup')} isInitiallyCollapsed={false} styles={styles}>
+    <CollapsibleSection title={t('coreSetup')} isInitiallyCollapsed={true} styles={styles}>
       <label style={styles.label}>{t('language')}</label>
       <select
         value={config.language}
@@ -843,7 +843,7 @@ export const QrCodeSection: React.FC<QrCodeSectionProps> = ({
   t
 }) => {
   return (
-    <CollapsibleSection title={t('qrCodeSection')} isInitiallyCollapsed={false} styles={styles}>
+    <CollapsibleSection title={t('qrCodeSection')} isInitiallyCollapsed={true} styles={styles}>
       <p style={{ fontSize: '0.85rem', color: effSecondaryTextColor, margin: '0 0 15px 0', lineHeight: 1.5 }}>
         {t('qrCodeSectionHelp')}
       </p>

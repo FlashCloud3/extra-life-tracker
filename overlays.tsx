@@ -1908,7 +1908,7 @@ const QRCodeOverlay = ({
   );
 };
 
-const CollapsibleSection = ({ title, children, isInitiallyCollapsed = false, styles }: { title: string, children: React.ReactNode, isInitiallyCollapsed?: boolean, styles: any }) => {
+const CollapsibleSection = ({ title, children, isInitiallyCollapsed = true, styles }: { title: string, children: React.ReactNode, isInitiallyCollapsed?: boolean, styles: any }) => {
     const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);
     const contentRef = useRef<HTMLDivElement>(null);
     const uniqueId = `section-content-${title.replace(/\s+/g, '-')}`;
