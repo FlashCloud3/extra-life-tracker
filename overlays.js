@@ -749,30 +749,44 @@ const TeamDashboardView = ({
     return [];
   }, [activeAccountId, participantId, participantDonations, teamDonations, participantName, activeFetched, activeMemberFromTeam]);
 
-  // Filtered team donations
+  // Sorted & Filtered team donations (most recent first)
+  const sortedTeamDonations = useMemo(() => {
+    return [...(teamDonations || [])].sort((a, b) => {
+      const timeA = a?.createdDateUTC ? new Date(a.createdDateUTC).getTime() : 0;
+      const timeB = b?.createdDateUTC ? new Date(b.createdDateUTC).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [teamDonations]);
   const filteredTeamDonations = useMemo(() => {
     const q = teamSearch.trim().toLowerCase();
-    if (!q) return teamDonations;
-    return teamDonations.filter(d => {
+    if (!q) return sortedTeamDonations;
+    return sortedTeamDonations.filter(d => {
       const donor = (d.displayName || t('anonymous')).toLowerCase();
       const recipient = (d.recipientName || '').toLowerCase();
       const msg = (d.message || '').toLowerCase();
       const amt = String(d.amount);
       return donor.includes(q) || recipient.includes(q) || msg.includes(q) || amt.includes(q);
     });
-  }, [teamDonations, teamSearch, t]);
+  }, [sortedTeamDonations, teamSearch, t]);
 
-  // Filtered account donations
+  // Sorted & Filtered account donations (most recent first)
+  const sortedAccountDonations = useMemo(() => {
+    return [...(rawAccountDonations || [])].sort((a, b) => {
+      const timeA = a?.createdDateUTC ? new Date(a.createdDateUTC).getTime() : 0;
+      const timeB = b?.createdDateUTC ? new Date(b.createdDateUTC).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [rawAccountDonations]);
   const filteredAccountDonations = useMemo(() => {
     const q = accountSearch.trim().toLowerCase();
-    if (!q) return rawAccountDonations;
-    return rawAccountDonations.filter(d => {
+    if (!q) return sortedAccountDonations;
+    return sortedAccountDonations.filter(d => {
       const donor = (d.displayName || t('anonymous')).toLowerCase();
       const msg = (d.message || '').toLowerCase();
       const amt = String(d.amount);
       return donor.includes(q) || msg.includes(q) || amt.includes(q);
     });
-  }, [rawAccountDonations, accountSearch, t]);
+  }, [sortedAccountDonations, accountSearch, t]);
 
   // Progress calculations
   const teamProgress = teamGoal > 0 ? Math.min(100, teamTotalRaised / teamGoal * 100) : 0;

@@ -88,8 +88,8 @@ export interface HeaderBarProps {
   effHighlightColor: string;
   hexToRgba: (hex: string, alpha: number) => string;
   handleChangeId: () => void;
-  dashboardView: 'participant' | 'team';
-  setDashboardView: (view: 'participant' | 'team') => void;
+  dashboardView: 'participant' | 'team' | 'settings';
+  setDashboardView: (view: 'participant' | 'team' | 'settings') => void;
   t: (key: string, vars?: any) => string;
 }
 
@@ -144,8 +144,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </button>
       </div>
 
-      {/* VIEW MODE TOGGLE (PARTICIPANT vs TEAM DASHBOARD) */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', width: '100%' }}>
+      {/* VIEW MODE TOGGLE (PARTICIPANT vs TEAM DASHBOARD vs SETTINGS) */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', width: '100%', flexWrap: 'wrap' }}>
         <button
           type="button"
           id="tab-participant-dashboard"
@@ -153,6 +153,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           style={{
             ...styles.button,
             flex: 1,
+            minWidth: '150px',
             margin: 0,
             padding: '12px 15px',
             fontSize: '0.95rem',
@@ -173,6 +174,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           style={{
             ...styles.button,
             flex: 1,
+            minWidth: '150px',
             margin: 0,
             padding: '12px 15px',
             fontSize: '0.95rem',
@@ -185,6 +187,27 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           }}
         >
           👥 {t('teamDashboard')}
+        </button>
+        <button
+          type="button"
+          id="tab-settings"
+          onClick={() => setDashboardView('settings')}
+          style={{
+            ...styles.button,
+            flex: 1,
+            minWidth: '150px',
+            margin: 0,
+            padding: '12px 15px',
+            fontSize: '0.95rem',
+            fontWeight: 'bold',
+            backgroundColor: dashboardView === 'settings' ? effPrimaryButtonBgColor : config.panelColor,
+            color: dashboardView === 'settings' ? config.buttonTextColor : config.textColor,
+            border: `2px solid ${dashboardView === 'settings' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.4)}`,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          ⚙️ {t('settingsTab')}
         </button>
       </div>
     </>

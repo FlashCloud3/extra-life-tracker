@@ -176,7 +176,8 @@ export const HeaderBar = ({
       display: 'flex',
       gap: '10px',
       marginBottom: '1.2rem',
-      width: '100%'
+      width: '100%',
+      flexWrap: 'wrap'
     }
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -185,6 +186,7 @@ export const HeaderBar = ({
     style: {
       ...styles.button,
       flex: 1,
+      minWidth: '150px',
       margin: 0,
       padding: '12px 15px',
       fontSize: '0.95rem',
@@ -202,6 +204,7 @@ export const HeaderBar = ({
     style: {
       ...styles.button,
       flex: 1,
+      minWidth: '150px',
       margin: 0,
       padding: '12px 15px',
       fontSize: '0.95rem',
@@ -212,7 +215,25 @@ export const HeaderBar = ({
       cursor: 'pointer',
       transition: 'all 0.2s ease'
     }
-  }, "👥 ", t('teamDashboard'))));
+  }, "👥 ", t('teamDashboard')), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    id: "tab-settings",
+    onClick: () => setDashboardView('settings'),
+    style: {
+      ...styles.button,
+      flex: 1,
+      minWidth: '150px',
+      margin: 0,
+      padding: '12px 15px',
+      fontSize: '0.95rem',
+      fontWeight: 'bold',
+      backgroundColor: dashboardView === 'settings' ? effPrimaryButtonBgColor : config.panelColor,
+      color: dashboardView === 'settings' ? config.buttonTextColor : config.textColor,
+      border: `2px solid ${dashboardView === 'settings' ? effHighlightColor : hexToRgba(config.panelBorderColor, 0.4)}`,
+      cursor: 'pointer',
+      transition: 'all 0.2s ease'
+    }
+  }, "⚙️ ", t('settingsTab'))));
 };
 
 // ==========================================
