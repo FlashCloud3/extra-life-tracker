@@ -45,16 +45,20 @@ export function useTwitchIntegration({
       const state = params.get('state');
 
       if (token) {
+        const fullToken = `oauth:${token}`;
+        setPendingTwitchToken(fullToken);
+
         const urlParams = new URLSearchParams(window.location.search);
         const urlProfile = urlParams.get('profile');
 
-        // If state matches another profile, redirect preserving hash
+        // If state matches another profile and we are not currently on that profile, switch to it
         if (state && state !== 'default' && state !== urlProfile) {
-          window.location.href = `${window.location.origin}/?profile=${encodeURIComponent(state)}${hash}`;
+          const newUrl = `${window.location.pathname}?profile=${encodeURIComponent(state)}${hash}`;
+          window.location.href = newUrl;
           return;
         }
 
-        setPendingTwitchToken(`oauth:${token}`);
+        // Clean the hash from the address bar
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     }

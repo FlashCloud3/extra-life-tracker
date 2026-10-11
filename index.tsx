@@ -432,13 +432,13 @@ const App = () => {
 
   sendTwitchAlertRef.current = sendTwitchAlert;
 
-  // Sync Twitch Token once connected
+  // Sync Twitch Token once acquired (works in both WebSocket-connected local mode and standalone GitHub Pages mode)
   useEffect(() => {
-    if (isConnected && pendingTwitchToken) {
+    if (pendingTwitchToken) {
       updateConfig({ twitchToken: pendingTwitchToken, twitchEnabled: true });
       setPendingTwitchToken(null);
     }
-  }, [isConnected, pendingTwitchToken, updateConfig, setPendingTwitchToken]);
+  }, [pendingTwitchToken, updateConfig, setPendingTwitchToken]);
 
   // Fetch available sound and sponsor lists from server
   useEffect(() => {

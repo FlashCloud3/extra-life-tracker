@@ -1294,20 +1294,33 @@ export const TwitchSection: React.FC<TwitchSectionProps> = ({
         />
 
         <label style={styles.label}>{t('twitchToken')}</label>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <input
             type="password"
             value={config.twitchToken}
             onChange={(e) => updateConfig({ twitchToken: e.target.value })}
-            style={styles.input}
+            placeholder="oauth:xxxxxxxxxxxxxx"
+            style={{ ...styles.input, flex: 1 }}
           />
           <button
             type="button"
             onClick={handleGetTwitchToken}
-            style={{ ...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px', margin: 0, whiteSpace: 'nowrap' }}
+            style={{ ...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 14px', margin: 0, whiteSpace: 'nowrap' }}
+            title={t('getTwitchToken')}
           >
-            {t('getTwitchToken')}
+            🔑 {t('getTwitchToken')}
           </button>
+        </div>
+        <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '6px', textAlign: 'left' }}>
+          <span>{t('twitchTokenHelp')} </span>
+          <a
+            href="https://twitchtokengenerator.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: effHighlightColor, textDecoration: 'underline' }}
+          >
+            {t('twitchTokenExternalLink')}
+          </a>
         </div>
 
         <div style={{ borderTop: `2px dashed ${effDividerColor}`, margin: '20px 0' }} />

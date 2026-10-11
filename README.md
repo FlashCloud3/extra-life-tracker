@@ -204,9 +204,9 @@ The tracker includes an integrated Twitch bot powered by `tmi.js` that works in 
 2. Check **Enable Twitch Bot**.
 3. Enter your **Twitch Channel** name (your Twitch username in lowercase).
 4. Provide an **OAuth Token**:
-   * Click **Get Twitch Token** or visit [twitchapps.com/tmi](https://twitchapps.com/tmi/).
-   * Authorize with Twitch to get your token (`oauth:xxxxxxxxxxxxxx`).
-   * Paste the token into the **OAuth Token** field.
+   * Click **Get OAuth Token** to authorize with Twitch and automatically populate your token.
+   * Or use an external token generator like [twitchtokengenerator.com](https://twitchtokengenerator.com/) (select scopes `chat:read` and `chat:edit`).
+   * Paste the token (`oauth:xxxxxxxxxxxxxx`) into the **OAuth Token** field.
 5. Configure your bot preferences:
    * **Enable Chat Alerts:** Automatically posts a message in your chat when a new donation arrives (e.g. `🎉 New Extra Life Donation! GenerousGamer donated $25.00! Thank you!`).
    * **Enable Chat Commands:**

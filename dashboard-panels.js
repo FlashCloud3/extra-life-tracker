@@ -1676,7 +1676,8 @@ export const TwitchSection = ({
   }, t('twitchToken')), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      gap: '10px'
+      gap: '10px',
+      alignItems: 'center'
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "password",
@@ -1684,7 +1685,11 @@ export const TwitchSection = ({
     onChange: e => updateConfig({
       twitchToken: e.target.value
     }),
-    style: styles.input
+    placeholder: "oauth:xxxxxxxxxxxxxx",
+    style: {
+      ...styles.input,
+      flex: 1
+    }
   }), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: handleGetTwitchToken,
@@ -1693,11 +1698,27 @@ export const TwitchSection = ({
       backgroundColor: effPrimaryButtonBgColor,
       color: config.buttonTextColor,
       fontSize: '0.9rem',
-      padding: '10px',
+      padding: '10px 14px',
       margin: 0,
       whiteSpace: 'nowrap'
+    },
+    title: t('getTwitchToken')
+  }, "🔑 ", t('getTwitchToken'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.75rem',
+      opacity: 0.7,
+      marginTop: '6px',
+      textAlign: 'left'
     }
-  }, t('getTwitchToken'))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, t('twitchTokenHelp'), " "), /*#__PURE__*/React.createElement("a", {
+    href: "https://twitchtokengenerator.com/",
+    target: "_blank",
+    rel: "noopener noreferrer",
+    style: {
+      color: effHighlightColor,
+      textDecoration: 'underline'
+    }
+  }, t('twitchTokenExternalLink'))), /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: `2px dashed ${effDividerColor}`,
       margin: '20px 0'
