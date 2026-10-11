@@ -48,7 +48,7 @@ You can run the tracker either **online via GitHub Pages** (zero installation) o
 
 ---
 
-### Option B: Running Locally with Node.js
+### Option B: Running Locally with Full-Stack Node.js
 
 **Prerequisites:** [Node.js](https://nodejs.org/) (version 18 or higher recommended).
 
@@ -70,6 +70,33 @@ You can run the tracker either **online via GitHub Pages** (zero installation) o
 
 4. **Open the dashboard:**
    Navigate to [http://localhost:3000](http://localhost:3000) in your web browser.
+
+---
+
+### Option C: Running Locally in Static / GitHub Pages Mode (Zero Backend)
+
+If you want to run the app on your computer **without starting the Node.js Express server**, simulating the exact client-side environment of GitHub Pages:
+
+> ⚠️ **Note:** Do not open `index.html` via `file:///` directly, as browsers block ES Module imports and Babel compilation on the local file system. Use any lightweight static HTTP server.
+
+1. **Start any local static server in the project folder:**
+   ```bash
+   # Option 1: Using Python 3 (built-in on most systems)
+   python3 -m http.server 8080
+
+   # Option 2: Using Node.js npx (no installation needed)
+   npx serve . -l 8080
+
+   # Option 3: In VS Code, right-click index.html -> "Open with Live Server"
+   ```
+
+2. **Open the dashboard:**
+   Navigate to [http://localhost:8080](http://localhost:8080) (or the port specified by your static server).
+
+3. **How it operates:**
+   - Automatically enters **Standalone Client Mode** (`BroadcastChannel` sync + client-side DonorDrive polling).
+   - Keep the dashboard open in a browser tab during your stream so it can feed live data to OBS browser sources.
+   - For complete details, see [**GITHUB_PAGES_LOCAL_GUIDE.md**](./GITHUB_PAGES_LOCAL_GUIDE.md).
 
 ---
 

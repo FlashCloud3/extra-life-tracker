@@ -747,3 +747,82 @@ export function getExtraLifeUrl(participantId, linkType = 'donation', customUrl 
   // Default to direct donation page
   return `https://dd.extra-life.org/index.cfm?fuseaction=twitchDonate.participant&participantID=${cleanId}`;
 }
+
+/**
+ * Downloads a rendered QR code as a high-resolution PNG image via browser canvas.
+ */
+export function downloadQRCodePng(
+  url,
+  filename = 'extralife-donation-qr.png',
+  targetSize = 1024,
+  fgColor = '#000000',
+  bgColor = '#ffffff',
+  errorCorrectionLevel = 'M'
+) {
+  try {
+    if (typeof document === 'undefined') return;
+    const matrix = createQRMatrix(url || 'https://dd.extra-life.org', errorCorrectionLevel);
+    const canvas = document.createElement('canvas');
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const margin = 2;
+    const fullSize = matrix.length + margin * 2;
+    const cell = targetSize / fullSize;
+    if (bgColor && bgColor !== 'transparent') {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, targetSize, targetSize);
+    } else {
+      ctx.clearRect(0, 0, targetSize, targetSize);
+    }
+    ctx.fillStyle = fgColor || '#000000';
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix.length; c++) {
+        if (matrix[r][c]) {
+          ctx.fillRect((c + margin) * cell, (r + margin) * cell, cell + 0.1, cell + 0.1);
+        }
+      }
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename || 'extralife-donation-qr.png';
+    a.click();
+  } catch (e) {
+    console.error('Download QR PNG failed:', e);
+  }
+}
+
+/**
+ * Downloads a rendered QR code as a scalable vector SVG file.
+ */
+export function downloadQRCodeSvg(
+  url,
+  filename = 'extralife-donation-qr.svg',
+  fgColor = '#000000',
+  bgColor = '#ffffff',
+  errorCorrectionLevel = 'M'
+) {
+  try {
+    if (typeof document === 'undefined') return;
+    const svgStr = createQRSvgString({
+      text: url,
+      size: 512,
+      margin: 2,
+      fgColor: fgColor || '#000000',
+      bgColor: bgColor || '#ffffff',
+      errorCorrectionLevel
+    });
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'extralife-donation-qr.svg';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (e) {
+    console.error('Download QR SVG failed:', e);
+  }
+}
+
