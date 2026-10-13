@@ -1,180 +1,154 @@
-# Extra Life Tracker - Application Options & Documentation
+# Extra Life Tracker - Application Options & Detailed Settings Reference
 
-This document outlines all available features, configuration options, overlay types, and API endpoints for the Extra Life Donation Tracker.
+> 🇫🇷 **Version française disponible :** Voir [`APP_OPTIONS_FR.md`](./APP_OPTIONS_FR.md) et [`README_FR.md`](./README_FR.md)
 
----
 
-## 1. Core Configuration
-Located in the "Core Setup" section of the settings panel.
-
-*   **Language:** Switch the interface between **English** and **French** (all phrase definitions and custom language dictionaries are located in `translations.js`).
-*   **Participant ID:** Your specific Extra Life Participant ID (found in your fundraising page URL).
-    *   *Note:* If you are using a specific ID loaded via the top switcher, this field is read-only.
-*   **Team ID:** Your Extra Life Team ID.
-*   **Auto-detect Team ID:** If enabled, the app automatically fetches the Team ID associated with your Participant ID.
-*   **Refresh (seconds):** How often the app polls the Extra Life API for new data (Minimum: 15 seconds).
-*   **Currency:** Choose between **USD ($)** and **CAD (C$)**. (Note: CAD uses a fixed estimated conversion rate).
-
-## 2. Multi-User Profiles (Participant IDs)
-The app supports tracking multiple participants simultaneously by using their **Participant ID** as the profile identifier.
-
-*   **Usage:**
-    *   To access the default profile: `http://localhost:3000`
-    *   To load a specific participant: `http://localhost:3000/?profile=PARTICIPANT_ID`
-*   **Loading an ID:** Type your Participant ID (e.g., `534123`) in the **"Load ID"** box at the top of the dashboard.
-*   **Automatic Sync:** When you load an ID, the tracker automatically sets the configuration to track that specific Participant ID.
-*   **Separate Settings:** Each ID maintains its own completely separate configuration file (colors, overlays, Twitch settings).
-*   **OBS Links:** When you click "Copy Link" on the dashboard, the link automatically includes the correct `&profile=ID` parameter.
-
-## 3. Event & Timing
-Located in the "Event & Timing" section.
-
-*   **Event Start Time:** Set the date and time for your marathon.
-    *   *Effect:* Displays a countdown timer ("Starts in...") or elapsed timer ("Time Elapsed...") on the dashboard and progress bar overlays.
-*   **Celebration Duration (s):** How long the confetti overlay lasts when triggered.
-
-## 4. Theming & Visuals
-Customize the look of your dashboard and overlays.
-
-### Presets
-*   **Neon Vibe** (Default)
-*   **Solarized Dark**
-*   **Hacker Green**
-*   **Synthwave**
-*   **Final Fantasy** (Classic Blue/White)
-*   **Final Fantasy XIV** (Dark Grey/Gold/Aether Blue)
-*   **Dwarf Fortress** (Black/Grey/Magma Red)
-
-### Advanced Theming
-*   **Font Family:**
-    *   Press Start 2P (Pixel art style)
-    *   Bungee
-    *   Roboto Mono
-    *   VT323
-    *   Cinzel (Fantasy style)
-*   **Notification Animation:**
-    *   Slide In
-    *   Fade In
-    *   Bounce In
-    *   Zoom In
-
-### Custom Colors
-You can manually override specific colors regardless of the preset:
-*   Background, Panel, Text
-*   Accent 1 (Primary headers/highlights)
-*   Accent 2 (Secondary details/borders)
-*   Border Color
-*   Success (Positive numbers/buttons)
-*   Error (Delete buttons/warnings)
-
-## 5. Audio Settings
-Manage sound alerts for donations and milestones.
-
-*   **Enable Sound:** Master toggle for all audio.
-*   **Volume:** Global volume slider (0% - 100%).
-*   **Donation Sound:**
-    *   *Default Coin:* A retro coin collect sound.
-    *   *Custom:* Select an uploaded file.
-*   **Milestone Sound:**
-    *   *Default Fanfare:* A retro level-up jingle.
-    *   *Custom:* Select an uploaded file.
-*   **Custom Sound Library:**
-    *   **Upload New Sound:** Upload `.mp3`, `.wav`, or `.ogg` files directly from your computer (Max 2MB).
-    *   **Add from App Folder:** If you place files manually in the `/sounds` folder of the app directory, they appear here to be added.
-
-## 6. Overlays (Browser Sources)
-Add these URLs as "Browser Sources" in OBS, XSplit, or Streamlabs.
-
-| Overlay Name | URL Parameter | Description |
-| :--- | :--- | :--- |
-| **Progress Bar** | `?overlay=progress` | Horizontal bar showing total raised vs goal. Includes timer. |
-| **Notifications** | `?overlay=notifications` | Pop-up "Toast" cards for new donations. Queues multiple donations. |
-| **Next Milestone** | `?overlay=milestone` | Shows the specific progress towards the *next* milestone on your list. |
-| **Team Tracker** | `?overlay=team` | Displays the Team Name and Total Team Amount. |
-| **Celebration** | `?overlay=celebration` | Full-screen transparent overlay. Fires confetti when a milestone is hit or "Test Donation" is clicked. |
-| **Schedule** | `?overlay=schedule` | Displays your stream schedule list. Crosses out items marked as "Done". |
-| **Sponsors** | `?overlay=sponsors` | Rotating slideshow of sponsor logos. |
-| **Text Display** | `?overlay=text` | Full-screen display of a selected text file content. Updates automatically. |
-
-**Tip:** You can click the "Copy Link" button in the "Overlay Links" section of the dashboard to get the exact URL.
-
-## 7. Content Management
-
-### Twitch Integration
-*   **Enable Twitch Integration:** Master toggle to connect or disconnect the bot entirely.
-*   **Enable Chat Alerts:** Toggle whether the bot automatically posts a message in chat ("🚨 New Donation...") when a donation is received.
-*   **Enable Chat Commands:** Toggle whether the bot responds to commands like `!total` or custom triggers.
-*   **Commands:** The bot responds to `!total`, `!goal`, and `!milestone` in your chat.
-
-### Stream Schedule
-*   **Add Item:** Enter a time and description to build your schedule.
-*   **Mark Done:** Click "Done" on an item to cross it out on the overlay (live update).
-*   **Delete:** Remove an item.
-
-### Sponsors
-*   **Slide Duration:** How long each image stays on screen before rotating.
-*   **Add Sponsor:**
-    1.  Place image files (`.jpg`, `.png`, etc.) in the `sponsors` folder in your app directory.
-    2.  Select the file from the dropdown in settings.
-    3.  Click "Add".
-
-### Text Overlay
-*   **File Selection:** Select a `.txt` file located in the `text_files` folder of your app directory.
-*   **Font Size:** Adjust the text size for better readability (default 1.5rem).
-*   **Usage:** Useful for "Now Playing", "Latest Subscriber", or general stream notes.
-*   **Live Updates:** If you edit the file on your computer, the overlay updates automatically within 2 seconds.
-
-## 8. Dashboard Controls
-Buttons located on the main dashboard for live stream management.
-
-*   **Test Donation (+$15):** Simulates a $15 donation. Triggers sound, notification, and celebration (if it crosses a goal/milestone). Great for testing audio levels.
-*   **Resync Data:** Forces an immediate call to the Extra Life API to update stats.
-*   **Clear & Stop All:**
-    *   Stops all currently playing sounds.
-    *   Clears the notification queue.
-    *   Removes confetti.
-    *   Useful if a sound gets stuck or you get flooded with alerts.
-
-## 9. API Reference (Automation)
-You can control the tracker externally (e.g., **Stream Deck**, **Touch Portal**, **Curl**) using HTTP POST requests to `http://localhost:3000`.
-
-### Change Theme
-*   **Endpoint:** `POST /api/theme`
-*   **Content-Type:** `application/json`
-*   **Body:**
-    ```json
-    { "name": "ffxiv", "profile": "PARTICIPANT_ID" }
-    ```
-*   **Available Theme Names:** `neon-vibe`, `solarized-dark`, `hacker-green`, `synthwave`, `final-fantasy`, `ffxiv`, `dwarf-fortress`.
-
-### Stop All Events
-*   **Endpoint:** `POST /api/stop-events`
-*   **Body:** `{ "profile": "PARTICIPANT_ID" }`
-*   **Effect:** Same as clicking the "Clear & Stop All" button.
-
-### Example: Stream Deck Setup (System: Website / HTTP Request)
-*   **URL:** `http://localhost:3000/api/theme`
-*   **Method:** `POST`
-*   **Content Type:** `application/json`
-*   **Body:** `{ "name": "hacker-green", "profile": "534123" }`
+This document provides a comprehensive guide to all navigation views, configuration settings, OBS overlay sources, asset folders, and API endpoints.
 
 ---
 
-## 10. Running Directly on GitHub Pages (Static Hosting)
+## 🧭 Navigation Views
 
-The tracker can run completely standalone without a local Node.js server, making it ideal for free 24/7 hosting on **GitHub Pages**.
+The top navigation bar provides three primary views:
 
-### Deploying to GitHub Pages
-1. Push this repository to GitHub.
-2. In your repository on GitHub, navigate to **Settings** > **Pages**.
-3. Under **Build and deployment** > **Source**, choose **Deploy from a branch**.
-4. Set the branch to `main` (or `master`) and directory to `/(root)`.
-5. Click **Save**. Within a minute, your tracker will be live at `https://<username>.github.io/<repo-name>/`!
+1. **👤 Participant Dashboard:**
+   - Real-time fundraising stats: Total Raised, Goal, Progress Bar, Marathon Elapsed/Countdown Timer.
+   - Recent donations list and milestone achievements.
+   - Live stream controls: **Test Donation (+$15)**, **Resync Data**, and **Clear & Stop All**.
+   - Overlay links cards for all participant overlays with one-click **Copy Link** and **Open Popup** preview buttons.
 
-### Features in Standalone / GitHub Pages Mode
-* **Direct Extra Life API Polling**: Directly queries the official DonorDrive API (`https://dd.extra-life.org/api/participants/...`) with native CORS support from the browser every refresh interval.
-* **Instant OBS Cross-Tab Sync**: Uses the browser's native `BroadcastChannel` API to synchronize configuration changes, test donations, and clearing commands to all OBS browser source overlays in real-time.
-* **Local Storage & Multiple Profiles**: Configurations for each Participant ID are saved in your browser's `localStorage`.
-* **Profile Backup & Restore**: Export your configuration (theme, schedule, custom audio) as a `.json` file and import it anywhere.
-* **In-Browser Twitch Chat Bot**: When enabled with a token, the bot connects directly to Twitch IRC over secure WebSockets via `tmi.js` in the browser to announce donations and reply to commands.
-* **Hybrid Compatibility**: If you run `node server.js` locally, the app will automatically detect and connect to the local server; if no server is running or when hosted on GitHub Pages, it runs in Standalone Mode.
+2. **👥 Team Dashboard:**
+   - Full team fundraising progress bar, total raised, goal, and donor count.
+   - Interactive roster list of all team members with their individual totals and fundraising goals.
+   - **Recent Team Donations Feed:** Automatically ordered with the **most recent donations first** across all team members, with search and donor filtering.
+   - Team member inspection: Click any team participant to view their personal donations and progress.
+   - Quick links and popup previews for Team Header, Team Donations feed, and full Team Dashboard overlays.
+
+3. **⚙️ Settings (Full-Page View):**
+   - Clean, full-page dedicated view containing all configuration sections without cluttering the live stream dashboard.
+   - Organized into collapsible panels described below.
+
+---
+
+## ⚙️ Settings Reference Guide
+
+### 1. Core Setup & Identification
+Located under **Core Setup**:
+* **Language:** Switch the entire UI dynamically between **English (`en`)** and **French (`fr`)**. All translations are defined in `translations.js`.
+* **Participant ID:** Your unique Extra Life numeric ID (e.g. `534123` from your fundraising page URL `extra-life.org/participant/534123`).
+* **Auto-detect Team ID:** Automatically queries DonorDrive to find and link the team your participant belongs to.
+* **Team ID:** Manually set your Extra Life Team ID if you want to track a team independently.
+* **Refresh Interval (seconds):** How frequently the app polls the Extra Life API for new data (minimum 15s; 60s recommended).
+* **Currency Mode:**
+  * **USD ($):** Standard Extra Life currency.
+  * **CAD (C$):** Automatically fetches live exchange rates, or allows custom fixed rate calculation based on your Extra Life Canadian page total.
+
+### 2. Event & Timing
+* **Event Start Time:** Set the date and time for your marathon.
+  * *Effect:* Displays a countdown timer ("Starts in...") prior to start, and an elapsed timer ("Time Elapsed...") once started on both dashboard and progress bar overlays.
+* **Celebration Duration (seconds):** Duration of the confetti celebration burst when goals or milestones are reached.
+
+### 3. Twitch Integration & Live Status
+* **Status Badge & Diagnostics:**
+  * Persistent live status indicator in both top navigation and Settings:
+    - 🟢 **Connected (`#channel`):** Active WebSocket connection to Twitch IRC.
+    - 🟡 **Connecting:** Reconnecting or negotiating IRC handshake.
+    - 🔴 **Error:** Authentication or connection error with detail tooltip and **Reconnect** button.
+    - ⚪ **Disabled / Needs Config:** Integration switched off or credentials needed.
+  * Diagnostics: Displays handled command count, alerts sent count, and last activity timestamp.
+  * **Send Test Message:** Sends a verification message to your channel to confirm chat write permissions.
+* **Enable Twitch Integration:** Master toggle for the Twitch chat bot.
+* **Twitch Channel:** Your Twitch username in lowercase.
+* **Twitch OAuth Token:** Token with `chat:read` and `chat:edit` scopes. Click **Get OAuth Token** for automatic authorization.
+* **Enable Chat Alerts:** Automatically posts a chat alert when a donation arrives.
+* **Enable Chat Commands:** Responds to built-in viewer commands (`!total`, `!goal`, `!milestone`).
+* **Custom Commands:** Create your own viewer commands (e.g., `!donate`, `!schedule`, `!guild`) with custom reply messages.
+
+### 4. Themes & Visual Customization
+* **Visual Presets:**
+  * **Neon Vibe** (Default retro cyan/magenta aesthetic)
+  * **Solarized Dark** (Muted blue/teal palette)
+  * **Hacker Green** (CRT terminal phosphor green)
+  * **Synthwave** (80s retrowave purple/pink)
+  * **Final Fantasy** (Classic Blue & White window frame)
+  * **Final Fantasy XIV** (Dark Grey, Gold & Aether Blue)
+  * **Dwarf Fortress** (Dark stone & Magma Red)
+* **Pixel Fonts & Typography:** Press Start 2P, Bungee, Roboto Mono, VT323, Cinzel.
+* **Notification Animations:** Slide In, Fade In, Bounce In, Zoom In.
+* **Custom Color Overrides:** Override background, panel, text, borders, headers, primary buttons, secondary buttons, success, and error colors.
+
+### 5. Sound & Audio Settings
+* **Enable Sound:** Master toggle for all audio alerts.
+* **Master Volume:** Volume slider from 0% to 100%.
+* **Donation Sound:** Choose between built-in 8-bit coin, uploaded files, or sounds from `/sounds/`.
+* **Milestone Sound:** Choose between built-in fanfare, uploaded files, or sounds from `/sounds/`.
+* **Sound Library & App Folder (`/sounds`):**
+  * Upload custom `.mp3`, `.wav`, or `.ogg` files (up to 2MB).
+  * **`/sounds` Folder:** Drop audio files into the project's `/sounds` folder to have them automatically appear in dropdowns. Includes 5 starter sounds: `chime.wav`, `bell.wav`, `fanfare.wav`, `coin.wav`, `alert.wav`.
+
+### 6. QR Code Overlay Settings
+* **Custom URL:** Defaults to your Extra Life participant page, or enter any custom URL.
+* **Label / Call to Action:** Text displayed above the QR code (e.g., "Scan to Donate!").
+* **Color & Size:** Adjust QR size, background color, and frame colors to match your layout.
+
+### 7. Marathon Schedule
+* **Add Block:** Enter time (e.g. `10:00 AM`) and game/activity description.
+* **Live Check-off:** Mark items as "Done" on the dashboard to cross them out in real-time on stream overlays.
+* **Reorder / Delete:** Manage schedule items.
+
+### 8. Sponsors Carousel
+* **Slide Duration:** Number of seconds each sponsor banner remains visible.
+* **Adding Sponsors:**
+  - **Upload Image:** Select a local image from your device.
+  - **Paste Image URL:** Provide any direct HTTPS image link.
+  - **`/sponsors` Folder:** Drop images into `/sponsors/` (supports `.svg`, `.png`, `.jpg`, `.webp`, `.gif`). Includes 5 starter sponsor banners (`sponsor-sample-gold.svg`, `silver`, `energy`, `community`, `extra-life`).
+
+### 9. Text Display Overlay
+* **Source Options:**
+  - **Direct Text Input:** Type custom announcements, rules, or messages directly in Settings.
+  - **Local File (`/text_files`):** Automatically reads and live-reloads any `.txt` file placed in `/text_files`.
+  - **Remote URL:** Fetches text from any raw URL periodically.
+* **Formatting:** Configure font size, text alignment (top-left, center, bottom-right, etc.).
+
+### 10. Milestones & Incentives
+* Add fundraising targets with amounts and descriptions (e.g. `$500 - Bean Boozled Challenge`).
+* Automatically feeds the **Next Milestone** overlay and Twitch `!milestone` command.
+
+### 11. Profile Backup & Multiple Users
+* **Participant ID Switching:** Switch between different streamers via `?profile=PARTICIPANT_ID`. Each ID maintains isolated settings.
+* **Export Settings:** Exports current profile settings as a downloadable `.json` file.
+* **Import Settings:** Restores an exported `.json` configuration file.
+
+---
+
+## 🎥 OBS Overlay Browser Sources
+
+| Overlay | Parameter | Dimensions | Description |
+| :--- | :--- | :--- | :--- |
+| **Progress Bar** | `?overlay=progress` | 800 × 120 | Horizontal bar with current total, goal, and marathon timer. |
+| **Notifications** | `?overlay=notifications` | 500 × 200 | Pop-up toast alert queue for new donations with animations and sound. |
+| **Next Milestone** | `?overlay=milestone` | 600 × 100 | Progress bar and remaining amount toward the upcoming milestone. |
+| **Team Header** | `?overlay=team-header` | 850 × 220 | Horizontal team banner with total raised, goal, and donor count. |
+| **Team Donations** | `?overlay=team-donations` | 500 × 750 | Dedicated list showing the **most recent team donations first**. |
+| **Team Dashboard** | `?overlay=team-dashboard` | 1280 × 850 | Full-screen command center with team stats, full roster, and donations feed. |
+| **Celebration** | `?overlay=celebration` | 1920 × 1080 | Full-screen confetti effect triggered by goals and milestones. |
+| **Schedule** | `?overlay=schedule` | 450 × 600 | Marathon schedule list; items marked "Done" are crossed out live. |
+| **Sponsors** | `?overlay=sponsors` | 400 × 150 | Rotating slideshow for stream sponsor banners. |
+| **Text Display** | `?overlay=text` | 600 × 150 | Custom message, local `.txt` file, or remote text stream banner. |
+| **QR Code** | `?overlay=qrcode` | 260 × 320 | Retro scan-to-donate QR code badge. |
+
+---
+
+## 🔌 Local Automation API (Stream Deck / HTTP Endpoints)
+
+When running the local server (`npm start`), control the tracker using HTTP POST requests:
+
+* **Change Theme:** `POST http://localhost:3000/api/theme`
+  * Body: `{"name": "synthwave", "profile": "534123"}`
+* **Stop All Sounds & Alerts:** `POST http://localhost:3000/api/stop-events`
+  * Body: `{"profile": "534123"}`
+* **Test Donation:** `POST http://localhost:3000/api/test-donation`
+  * Body: `{"amount": 15, "profile": "534123"}`
+* **List Sponsors / Sounds:**
+  * `GET http://localhost:3000/api/list-sponsors`
+  * `GET http://localhost:3000/api/list-sounds`
