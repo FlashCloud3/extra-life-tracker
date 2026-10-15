@@ -231,4 +231,5 @@ export const DEFAULT_CONFIG = {
   qrSize: 220,
   qrErrorCorrection: 'M',
   qrShowCardInDashboard: true,
+  graphTransparentBg: false,
 };

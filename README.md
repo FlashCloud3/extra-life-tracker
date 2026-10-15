@@ -95,11 +95,13 @@ The dashboard offers three full-page views accessible from the top navigation ba
 
 1. **👤 Participant Dashboard:**
    - Real-time fundraising stats: Total Raised, Goal, Progress Bar, and Marathon Timer.
+   - **📈 Annual Fundraising Progress & Milestones Graph (Collapsible, Collapsed by Default):** Interactive timeline tracking cumulative donations across the campaign year, with horizontal target lines for each milestone and campaign goal, celebratory markers (🏆) pinpointing the exact date and donation where each milestone was unlocked, and toggleable **Cumulative Growth** vs **Monthly Breakdown** views.
    - Recent donations list, milestone tracker, and quick action buttons (Test Donation, Manual Resync, Clear Overlays).
    - Quick-access OBS browser source links with one-click **Copy Link** and **Open Popup** preview buttons.
 
 2. **👥 Team Dashboard:**
    - Full team fundraising progress bar, total raised, goal, and donor count.
+   - **📈 Team & Member Annual Progress Graph (Collapsible, Collapsed by Default):** Interactive annual collection graph with one-click toggle between **Entire Team Progress** (macro team cumulative growth curve & team goal targets) and **Selected Member Progress** (individual member curve with personal milestones).
    - Interactive roster list of all team members with their individual totals and fundraising goals.
    - **Recent Team Donations List:** Automatically sorted with the **most recent donations first** across all team members, with search and donor filtering.
    - Member inspection: Click any team participant to inspect their personal donations and progress.

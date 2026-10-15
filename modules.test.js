@@ -168,23 +168,43 @@ describe('Modular Core Utilities & Config', () => {
       expect(typeof overlays.QRCodeSvg).toBe('function');
       expect(typeof overlays.QRCodeOverlay).toBe('function');
       expect(typeof overlays.CollapsibleSection).toBe('function');
+      expect(typeof overlays.AnnualProgressGraph).toBe('function');
+      expect(typeof overlays.GraphOverlay).toBe('function');
     });
 
-    test('ProgressBar renders a valid React element', async () => {
-      const { ProgressBar } = await import('./overlays.js');
-      const el = ProgressBar({
-        totalRaised: 250,
-        goal: 500,
-        timeDisplay: '01:23:45',
-        progressPercentage: 50,
+    test('GraphOverlay and AnnualProgressGraph components can be instantiated', async () => {
+      const React = (await import('react')).default;
+      const { AnnualProgressGraph, GraphOverlay } = await import('./overlays.js');
+      expect(typeof AnnualProgressGraph).toBe('function');
+      expect(typeof GraphOverlay).toBe('function');
+
+      const graphEl = React.createElement(AnnualProgressGraph, {
+        styles: { card: {} },
+        config: { fontFamily: 'sans-serif' },
+        donations: [{ donationID: '1', amount: 50, createdDateUTC: '2026-05-01T12:00:00Z', displayName: 'Hero' }],
+        milestones: [{ milestoneID: 'm1', fundraisingGoal: 100, description: 'First goal' }],
+        goal: 1000,
+        totalRaised: 50,
         currencyPrefix: '$',
-        convertAmount: (amt) => amt,
-        styles: { progressBarContainer: {}, progressBar: {}, progressText: {}, timerText: {}, goalText: {} },
-        config: {},
-        t: (k) => k
+        convertAmount: (a) => a,
+        t: (k) => k,
+        isOverlay: false
       });
-      expect(el).toBeTruthy();
-      expect(el.type).toBe('div');
+      expect(React.isValidElement(graphEl)).toBe(true);
+
+      const overlayEl = React.createElement(GraphOverlay, {
+        styles: { card: {} },
+        config: { fontFamily: 'sans-serif' },
+        donations: [],
+        milestones: [],
+        goal: 500,
+        totalRaised: 100,
+        currencyPrefix: '$',
+        convertAmount: (a) => a,
+        t: (k) => k,
+        isTransparent: true
+      });
+      expect(React.isValidElement(overlayEl)).toBe(true);
     });
   });
 

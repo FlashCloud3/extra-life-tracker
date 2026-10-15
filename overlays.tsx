@@ -695,6 +695,921 @@ const TeamDonationsOverlay: React.FC<TeamDonationsOverlayProps> = ({
   );
 };
 
+// ==========================================
+// ANNUAL PROGRESS GRAPH COMPONENT
+// ==========================================
+export interface AnnualProgressGraphProps {
+  styles: any;
+  config: any;
+  donations: any[];
+  milestones?: any[];
+  goal: number;
+  totalRaised: number;
+  currencyPrefix: string;
+  convertAmount: (amount: number) => number;
+  t: (key: string, vars?: any) => string;
+  entityName?: string;
+  isTeam?: boolean;
+  effHighlightColor?: string;
+  effHeaderColor?: string;
+  effSecondaryTextColor?: string;
+  effDividerColor?: string;
+  effPrimaryButtonBgColor?: string;
+  effSecondaryButtonBgColor?: string;
+  hexToRgba: (hex: string, alpha: number) => string;
+  isInitiallyCollapsed?: boolean;
+  isOverlay?: boolean;
+  isTransparent?: boolean;
+}
+
+const AnnualProgressGraph: React.FC<AnnualProgressGraphProps> = ({
+  styles,
+  config,
+  donations = [],
+  milestones = [],
+  goal = 0,
+  totalRaised = 0,
+  currencyPrefix = '$',
+  convertAmount = (a: number) => a,
+  t,
+  entityName = '',
+  isTeam = false,
+  effHighlightColor = '#00ffff',
+  effHeaderColor = '#00ffff',
+  effSecondaryTextColor = '#a0a0a0',
+  effDividerColor = '#333333',
+  effPrimaryButtonBgColor = '#ff00ff',
+  effSecondaryButtonBgColor = '#333333',
+  hexToRgba = (h: string, a: number) => h,
+  isInitiallyCollapsed = true,
+  isOverlay = false,
+  isTransparent = false
+}) => {
+  const currentYear = new Date().getFullYear();
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(isOverlay ? false : isInitiallyCollapsed);
+
+  // Automatically derive campaign year from donation timestamps or default to current year
+  const campaignYear = useMemo(() => {
+    if (donations && donations.length > 0) {
+      for (const d of donations) {
+        if (d?.createdDateUTC) {
+          const yr = new Date(d.createdDateUTC).getFullYear();
+          if (!isNaN(yr) && yr > 2000 && yr < 2100) return yr;
+        }
+      }
+    }
+    return currentYear;
+  }, [donations, currentYear]);
+
+  const [viewMode, setViewMode] = useState<'cumulative' | 'monthly'>('cumulative');
+  const [showMilestones, setShowMilestones] = useState<boolean>(true);
+  const [hoveredPoint, setHoveredPoint] = useState<{
+    x: number;
+    y: number;
+    date: Date;
+    cumulativeTotal: number;
+    amount?: number;
+    donor?: string;
+    message?: string;
+    milestone?: any;
+    isMilestoneHit?: boolean;
+    monthName?: string;
+    monthCount?: number;
+  } | null>(null);
+
+  // Filter & sort donations chronologically (oldest to newest)
+  const sortedYearDonations = useMemo(() => {
+    return (donations || [])
+      .filter(d => Boolean(d?.createdDateUTC))
+      .sort((a, b) => new Date(a.createdDateUTC).getTime() - new Date(b.createdDateUTC).getTime());
+  }, [donations]);
+
+  // Year Total
+  const yearTotalAmount = useMemo(() => {
+    return sortedYearDonations.reduce((acc, d) => acc + convertAmount(d.amount || 0), 0);
+  }, [sortedYearDonations, convertAmount]);
+
+  // 12-month breakdown
+  const monthlyData = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(campaignYear, i, 1);
+      return {
+        monthIndex: i,
+        name: d.toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }),
+        fullName: d.toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long' }),
+        amount: 0,
+        count: 0
+      };
+    });
+
+    sortedYearDonations.forEach(d => {
+      const dt = new Date(d.createdDateUTC);
+      const m = dt.getMonth();
+      if (m >= 0 && m < 12) {
+        months[m].amount += convertAmount(d.amount || 0);
+        months[m].count += 1;
+      }
+    });
+
+    return months;
+  }, [sortedYearDonations, convertAmount, config.language, campaignYear]);
+
+  // Top month
+  const topMonth = useMemo(() => {
+    let top = monthlyData[0];
+    monthlyData.forEach(m => {
+      if (m.amount > top.amount) top = m;
+    });
+    return top.amount > 0 ? top : null;
+  }, [monthlyData]);
+
+  // Milestones list
+  const effectiveMilestones = useMemo(() => {
+    let list: Array<{ milestoneID?: string; fundraisingGoal: number; description: string }> = [];
+    if (milestones && milestones.length > 0) {
+      list = milestones.map(m => ({
+        milestoneID: m.milestoneID,
+        fundraisingGoal: m.fundraisingGoal,
+        description: m.description || `Milestone ${currencyPrefix}${convertAmount(m.fundraisingGoal).toFixed(0)}`
+      }));
+    } else if (goal > 0) {
+      list = [
+        { milestoneID: 'm25', fundraisingGoal: Math.round(goal * 0.25), description: '25% Goal' },
+        { milestoneID: 'm50', fundraisingGoal: Math.round(goal * 0.50), description: '50% Halfway' },
+        { milestoneID: 'm75', fundraisingGoal: Math.round(goal * 0.75), description: '75% Stretch' },
+        { milestoneID: 'm100', fundraisingGoal: goal, description: t('campaignGoal') }
+      ];
+    }
+    if (goal > 0 && !list.some(m => Math.abs(m.fundraisingGoal - goal) < 1)) {
+      list.push({ milestoneID: 'goal', fundraisingGoal: goal, description: t('campaignGoal') });
+    }
+    return list.sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
+  }, [milestones, goal, currencyPrefix, convertAmount, t]);
+
+  // Timeline points & milestone hit calculation
+  const { timelinePoints, milestoneHits } = useMemo(() => {
+    let running = 0;
+    const pts: Array<{
+      date: Date;
+      timestamp: number;
+      amount: number;
+      cumulativeTotal: number;
+      donation: any;
+      unlockedMilestones: any[];
+    }> = [];
+
+    const hits = new Map<string, {
+      milestone: any;
+      hitDate: Date;
+      donation: any;
+      cumulativeTotal: number;
+    }>();
+
+    sortedYearDonations.forEach(d => {
+      const prev = running;
+      const amt = convertAmount(d.amount || 0);
+      running += amt;
+      const dDate = new Date(d.createdDateUTC);
+      const newlyUnlocked: any[] = [];
+
+      effectiveMilestones.forEach(m => {
+        const mGoal = convertAmount(m.fundraisingGoal);
+        const mKey = m.milestoneID || String(m.fundraisingGoal);
+        if (prev < mGoal && running >= mGoal && !hits.has(mKey)) {
+          hits.set(mKey, {
+            milestone: m,
+            hitDate: dDate,
+            donation: d,
+            cumulativeTotal: running
+          });
+          newlyUnlocked.push(m);
+        }
+      });
+
+      pts.push({
+        date: dDate,
+        timestamp: dDate.getTime(),
+        amount: amt,
+        cumulativeTotal: running,
+        donation: d,
+        unlockedMilestones: newlyUnlocked
+      });
+    });
+
+    return { timelinePoints: pts, milestoneHits: hits };
+  }, [sortedYearDonations, convertAmount, effectiveMilestones]);
+
+  // Next milestone
+  const currentTotalCalculated = Math.max(yearTotalAmount, totalRaised > 0 ? convertAmount(totalRaised) : 0);
+  const nextMilestone = useMemo(() => {
+    return effectiveMilestones.find(m => convertAmount(m.fundraisingGoal) > currentTotalCalculated) || null;
+  }, [effectiveMilestones, currentTotalCalculated, convertAmount]);
+
+  // SVG Chart Geometry
+  const svgW = 840;
+  const svgH = 340;
+  const padL = 75;
+  const padR = 150;
+  const padT = 35;
+  const padB = 45;
+  const plotW = svgW - padL - padR;
+  const plotH = svgH - padT - padB;
+
+  const maxMilestoneVal = effectiveMilestones.length > 0
+    ? Math.max(...effectiveMilestones.map(m => convertAmount(m.fundraisingGoal)))
+    : 0;
+  const goalVal = convertAmount(goal || 0);
+  const ceiling = Math.max(currentTotalCalculated, goalVal, maxMilestoneVal, 100);
+  const maxY = Math.ceil((ceiling * 1.15) / 50) * 50 || 100;
+
+  const yearStart = new Date(campaignYear, 0, 1).getTime();
+  const yearEnd = new Date(campaignYear, 11, 31, 23, 59, 59).getTime();
+
+  const getX = (tMs: number) => {
+    const frac = Math.max(0, Math.min(1, (tMs - yearStart) / Math.max(1, yearEnd - yearStart)));
+    return padL + frac * plotW;
+  };
+
+  const getY = (val: number) => {
+    const frac = Math.max(0, Math.min(1, val / maxY));
+    return padT + plotH - frac * plotH;
+  };
+
+  // Gridlines
+  const gridSteps = 4;
+  const gridLines = Array.from({ length: gridSteps + 1 }, (_, i) => {
+    const val = (maxY / gridSteps) * i;
+    return { val, y: getY(val) };
+  });
+
+  // Cumulative Paths
+  const { linePath, areaPath } = useMemo(() => {
+    if (timelinePoints.length === 0) {
+      return { linePath: '', areaPath: '' };
+    }
+
+    const startX = padL;
+    const startY = padT + plotH;
+    let pathD = `M ${startX} ${startY}`;
+
+    let lastX = startX;
+    let lastY = startY;
+
+    timelinePoints.forEach(pt => {
+      const x = getX(pt.timestamp);
+      const y = getY(pt.cumulativeTotal);
+      pathD += ` L ${x} ${y}`;
+      lastX = x;
+      lastY = y;
+    });
+
+    // If within current year, extend line horizontally to current date
+    const now = Date.now();
+    if (now > yearStart && now < yearEnd) {
+      const todayX = getX(now);
+      if (todayX > lastX) {
+        pathD += ` L ${todayX} ${lastY}`;
+        lastX = todayX;
+      }
+    }
+
+    const areaD = `${pathD} L ${lastX} ${padT + plotH} L ${startX} ${padT + plotH} Z`;
+    return { linePath: pathD, areaPath: areaD };
+  }, [timelinePoints, yearStart, yearEnd, padL, padT, plotH]);
+
+  // Unique Grad ID for Theme
+  const gradId = useMemo(() => `annualProgressGrad_${Math.random().toString(36).substr(2, 9)}`, []);
+
+  return (
+    <div style={{
+      ...styles.card,
+      backgroundColor: isTransparent ? 'transparent' : (styles.card?.backgroundColor || config.panelColor),
+      border: isTransparent
+        ? (isOverlay ? `1px solid ${hexToRgba(effHighlightColor, 0.4)}` : 'none')
+        : `2px solid ${effHighlightColor}`,
+      boxShadow: isOverlay && !isTransparent ? '0 8px 32px rgba(0,0,0,0.5)' : 'none',
+      borderRadius: isOverlay ? '8px' : 0,
+      padding: isOverlay ? '16px 20px' : (styles.card?.padding || '15px'),
+      boxSizing: 'border-box' as const,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: isCollapsed ? '0' : '14px',
+      width: '100%',
+      position: 'relative',
+      fontFamily: config.fontFamily
+    }}>
+      {/* HEADER BAR */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          borderBottom: isCollapsed ? 'none' : `1px dashed ${effDividerColor}`,
+          paddingBottom: isCollapsed ? '0' : '10px',
+          cursor: isOverlay ? 'default' : 'pointer',
+          userSelect: 'none' as const,
+          width: '100%'
+        }}
+        onClick={() => !isOverlay && setIsCollapsed(prev => !prev)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {!isOverlay && (
+            <span style={{
+              fontSize: '1rem',
+              color: effHighlightColor,
+              transition: 'transform 0.2s ease-in-out',
+              transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+              display: 'inline-block'
+            }}>
+              ▸
+            </span>
+          )}
+          <span style={{ fontSize: '1.2rem' }}>📈</span>
+          <h3 style={{ margin: 0, color: effHeaderColor, fontSize: '1.1rem', letterSpacing: '0.5px' }}>
+            {t('annualProgress')}
+          </h3>
+          {entityName && (
+            <span style={{
+              fontSize: '0.75rem',
+              backgroundColor: hexToRgba(effHighlightColor, 0.15),
+              color: effHighlightColor,
+              padding: '2px 8px',
+              border: `1px solid ${hexToRgba(effHighlightColor, 0.3)}`,
+              fontWeight: 'bold'
+            }}>
+              {entityName}
+            </span>
+          )}
+
+          {isCollapsed && (
+            <span style={{
+              fontSize: '0.8rem',
+              color: config.successColor,
+              fontWeight: 'bold',
+              marginLeft: '4px'
+            }}>
+              • {currencyPrefix}{yearTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span style={{ color: effSecondaryTextColor, fontWeight: 'normal', marginLeft: '6px' }}>
+                ({milestoneHits.size}/{effectiveMilestones.length} {t('milestonesAchieved')})
+              </span>
+            </span>
+          )}
+        </div>
+
+        {/* CONTROLS */}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {!isCollapsed && (
+            <>
+              {/* View Mode Toggle */}
+              <div style={{ display: 'inline-flex', backgroundColor: hexToRgba(config.backgroundColor, 0.6), borderRadius: '4px', padding: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('cumulative')}
+                  style={{
+                    ...styles.button,
+                    margin: 0,
+                    padding: '5px 10px',
+                    fontSize: '0.72rem',
+                    backgroundColor: viewMode === 'cumulative' ? effPrimaryButtonBgColor : 'transparent',
+                    color: viewMode === 'cumulative' ? config.buttonTextColor : config.textColor,
+                    border: 'none',
+                    borderRadius: '3px'
+                  }}
+                >
+                  📈 {t('cumulativeGrowth')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('monthly')}
+                  style={{
+                    ...styles.button,
+                    margin: 0,
+                    padding: '5px 10px',
+                    fontSize: '0.72rem',
+                    backgroundColor: viewMode === 'monthly' ? effPrimaryButtonBgColor : 'transparent',
+                    color: viewMode === 'monthly' ? config.buttonTextColor : config.textColor,
+                    border: 'none',
+                    borderRadius: '3px'
+                  }}
+                >
+                  📊 {t('monthlyBreakdown')}
+                </button>
+              </div>
+
+              {/* Milestones Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowMilestones(prev => !prev)}
+                style={{
+                  ...styles.button,
+                  margin: 0,
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  backgroundColor: showMilestones ? hexToRgba(config.successColor, 0.25) : config.panelColor,
+                  border: `1px solid ${showMilestones ? config.successColor : effDividerColor}`,
+                  color: showMilestones ? config.successColor : effSecondaryTextColor,
+                  borderRadius: '4px'
+                }}
+              >
+                🎯 {t('milestonesToggle')}: {showMilestones ? 'ON' : 'OFF'}
+              </button>
+            </>
+          )}
+
+          {/* Collapse / Expand Toggle Button (Hidden in standalone overlay mode) */}
+          {!isOverlay && (
+            <button
+              type="button"
+              onClick={() => setIsCollapsed(prev => !prev)}
+              style={{
+                ...styles.button,
+                margin: 0,
+                padding: '5px 12px',
+                fontSize: '0.75rem',
+                backgroundColor: isCollapsed ? effPrimaryButtonBgColor : config.panelColor,
+                color: isCollapsed ? config.buttonTextColor : config.textColor,
+                border: `1px solid ${isCollapsed ? effHighlightColor : effDividerColor}`,
+                borderRadius: '4px'
+              }}
+            >
+              {isCollapsed ? `▸ ${t('showGraph')}` : `▾ ${t('hideGraph')}`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!isCollapsed && (
+        <>
+          {/* METRIC TILES SUMMARY */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: '10px'
+          }}>
+            <div style={{
+              backgroundColor: hexToRgba(config.panelColor, 0.6),
+              border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+              padding: '10px 12px',
+              borderRadius: '6px'
+            }}>
+              <span style={{ fontSize: '0.75rem', color: effSecondaryTextColor, display: 'block', textTransform: 'uppercase' }}>
+                💰 {t('totalAtTime')}
+              </span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: config.successColor, marginTop: '2px', display: 'block' }}>
+                {currencyPrefix}{yearTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+        <div style={{
+          backgroundColor: hexToRgba(config.panelColor, 0.6),
+          border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+          padding: '10px 12px',
+          borderRadius: '6px'
+        }}>
+          <span style={{ fontSize: '0.75rem', color: effSecondaryTextColor, display: 'block', textTransform: 'uppercase' }}>
+            🎯 {t('milestonesAchieved')}
+          </span>
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: effHighlightColor, marginTop: '2px', display: 'block' }}>
+            {milestoneHits.size} / {effectiveMilestones.length}
+            <span style={{ fontSize: '0.75rem', opacity: 0.8, marginLeft: '6px', color: effSecondaryTextColor }}>
+              ({effectiveMilestones.length > 0 ? Math.round((milestoneHits.size / effectiveMilestones.length) * 100) : 0}%)
+            </span>
+          </span>
+        </div>
+
+        <div style={{
+          backgroundColor: hexToRgba(config.panelColor, 0.6),
+          border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+          padding: '10px 12px',
+          borderRadius: '6px'
+        }}>
+          <span style={{ fontSize: '0.75rem', color: effSecondaryTextColor, display: 'block', textTransform: 'uppercase' }}>
+            🚀 {t('nextMilestone')}
+          </span>
+          <span style={{
+            fontSize: '0.9rem',
+            fontWeight: 'bold',
+            color: nextMilestone ? (config.accentColor1 || '#ff00ff') : config.successColor,
+            marginTop: '2px',
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {nextMilestone
+              ? `${currencyPrefix}${(convertAmount(nextMilestone.fundraisingGoal) - currentTotalCalculated).toFixed(0)} to ${nextMilestone.description.slice(0, 18)}`
+              : t('allMilestonesReached')
+            }
+          </span>
+        </div>
+
+        <div style={{
+          backgroundColor: hexToRgba(config.panelColor, 0.6),
+          border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+          padding: '10px 12px',
+          borderRadius: '6px'
+        }}>
+          <span style={{ fontSize: '0.75rem', color: effSecondaryTextColor, display: 'block', textTransform: 'uppercase' }}>
+            📅 {t('topMonth')}
+          </span>
+          <span style={{ fontSize: '1.05rem', fontWeight: 'bold', color: config.textColor, marginTop: '2px', display: 'block' }}>
+            {topMonth ? `${topMonth.name} (${currencyPrefix}${topMonth.amount.toFixed(0)})` : '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* SVG CHART CONTAINER */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        backgroundColor: hexToRgba(config.backgroundColor, 0.65),
+        border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`,
+        borderRadius: '6px',
+        overflow: 'visible',
+        padding: '8px 4px',
+        boxSizing: 'border-box' as const
+      }}>
+        <svg
+          viewBox={`0 0 ${svgW} ${svgH}`}
+          style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+          onMouseLeave={() => setHoveredPoint(null)}
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={config.successColor || '#00ff00'} stopOpacity="0.45" />
+              <stop offset="60%" stopColor={effHighlightColor || '#00ffff'} stopOpacity="0.18" />
+              <stop offset="100%" stopColor={effHighlightColor || '#00ffff'} stopOpacity="0.0" />
+            </linearGradient>
+            <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {/* Horizontal Gridlines & Y-Axis Labels */}
+          {gridLines.map((gl, i) => (
+            <g key={i}>
+              <line
+                x1={padL}
+                y1={gl.y}
+                x2={padL + plotW}
+                y2={gl.y}
+                stroke={hexToRgba(config.textColor, 0.12)}
+                strokeDasharray="2,4"
+              />
+              <text
+                x={padL - 10}
+                y={gl.y + 4}
+                textAnchor="end"
+                fill={effSecondaryTextColor}
+                fontSize="10"
+                fontFamily="monospace"
+              >
+                {currencyPrefix}{Math.round(gl.val)}
+              </text>
+            </g>
+          ))}
+
+          {/* X-Axis Month Grid & Labels */}
+          {Array.from({ length: 12 }, (_, i) => {
+            const frac = (i + 0.5) / 12;
+            const x = padL + frac * plotW;
+            const lineX = padL + (i / 12) * plotW;
+            const monthLabel = new Date(2026, i, 1).toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'narrow' });
+            return (
+              <g key={i}>
+                {i > 0 && (
+                  <line
+                    x1={lineX}
+                    y1={padT}
+                    x2={lineX}
+                    y2={padT + plotH}
+                    stroke={hexToRgba(config.textColor, 0.06)}
+                  />
+                )}
+                <text
+                  x={x}
+                  y={padT + plotH + 20}
+                  textAnchor="middle"
+                  fill={effSecondaryTextColor}
+                  fontSize="11"
+                  fontWeight="bold"
+                  fontFamily={config.fontFamily}
+                >
+                  {monthlyData[i]?.name || monthLabel}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* HORIZONTAL MILESTONE LINES */}
+          {showMilestones && effectiveMilestones.map(m => {
+            const mVal = convertAmount(m.fundraisingGoal);
+            const mY = getY(mVal);
+            if (mY < padT - 15 || mY > padT + plotH + 15) return null;
+
+            const mKey = m.milestoneID || String(m.fundraisingGoal);
+            const hitInfo = milestoneHits.get(mKey);
+            const isHit = Boolean(hitInfo) || currentTotalCalculated >= mVal;
+            const lineColor = isHit ? (config.successColor || '#00ff00') : (config.accentColor1 || '#ff00ff');
+
+            return (
+              <g key={mKey}>
+                <line
+                  x1={padL}
+                  y1={mY}
+                  x2={padL + plotW}
+                  y2={mY}
+                  stroke={lineColor}
+                  strokeWidth={isHit ? 2 : 1.5}
+                  strokeDasharray={isHit ? '5,4' : '4,6'}
+                  opacity={isHit ? 0.9 : 0.65}
+                />
+                {/* Milestone Badge on Right */}
+                <g
+                  transform={`translate(${padL + plotW + 6}, ${mY - 11})`}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) => {
+                    const rect = (e.target as SVGElement).getBoundingClientRect();
+                    setHoveredPoint({
+                      x: padL + plotW,
+                      y: mY,
+                      date: hitInfo ? hitInfo.hitDate : new Date(),
+                      cumulativeTotal: mVal,
+                      milestone: m,
+                      isMilestoneHit: isHit
+                    });
+                  }}
+                >
+                  <rect
+                    width="136"
+                    height="22"
+                    rx="4"
+                    fill={hexToRgba(lineColor, 0.2)}
+                    stroke={lineColor}
+                    strokeWidth="1"
+                  />
+                  <text
+                    x="8"
+                    y="15"
+                    fill={lineColor}
+                    fontSize="9.5"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                  >
+                    {isHit ? '✓' : '🎯'} {currencyPrefix}{mVal.toFixed(0)} - {m.description.slice(0, 11)}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+
+          {/* VIEW MODE 1: CUMULATIVE GROWTH LINE & AREA */}
+          {viewMode === 'cumulative' && (
+            <>
+              {areaPath && (
+                <path
+                  d={areaPath}
+                  fill={`url(#${gradId})`}
+                />
+              )}
+
+              {linePath && (
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke={config.successColor || '#00ff00'}
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#glowFilter)"
+                />
+              )}
+
+              {/* VERTICAL GUIDELINES & MARKERS FOR HIT MILESTONES */}
+              {showMilestones && Array.from(milestoneHits.values()).map((hit, idx) => {
+                const hitX = getX(hit.hitDate.getTime());
+                const hitY = getY(hit.cumulativeTotal);
+                return (
+                  <g key={`hit-${idx}`}>
+                    {/* Vertical guideline */}
+                    <line
+                      x1={hitX}
+                      y1={hitY}
+                      x2={hitX}
+                      y2={padT + plotH}
+                      stroke={config.successColor || '#00ff00'}
+                      strokeWidth="1.5"
+                      strokeDasharray="3,3"
+                      opacity="0.7"
+                    />
+
+                    {/* Celebration Trophy Pin */}
+                    <g
+                      transform={`translate(${hitX}, ${hitY})`}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => {
+                        setHoveredPoint({
+                          x: hitX,
+                          y: hitY,
+                          date: hit.hitDate,
+                          cumulativeTotal: hit.cumulativeTotal,
+                          amount: convertAmount(hit.donation.amount || 0),
+                          donor: hit.donation.displayName || t('anonymous'),
+                          message: hit.donation.message,
+                          milestone: hit.milestone,
+                          isMilestoneHit: true
+                        });
+                      }}
+                    >
+                      <circle r="9" fill={config.successColor || '#00ff00'} opacity="0.3" />
+                      <circle r="5" fill="#ffffff" stroke={config.successColor || '#00ff00'} strokeWidth="2" />
+                      <text
+                        x="0"
+                        y="-12"
+                        textAnchor="middle"
+                        fill="#ffea00"
+                        fontSize="12"
+                        fontWeight="bold"
+                      >
+                        🏆
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* INDIVIDUAL DONATION DATA POINTS (Interactive Hover) */}
+              {timelinePoints.map((pt, idx) => {
+                const ptX = getX(pt.timestamp);
+                const ptY = getY(pt.cumulativeTotal);
+                return (
+                  <circle
+                    key={`pt-${idx}`}
+                    cx={ptX}
+                    cy={ptY}
+                    r="4"
+                    fill={pt.unlockedMilestones.length > 0 ? '#ffea00' : (effHighlightColor || '#00ffff')}
+                    stroke={config.backgroundColor}
+                    strokeWidth="1.5"
+                    style={{ cursor: 'pointer' }}
+                    onMouseEnter={() => {
+                      setHoveredPoint({
+                        x: ptX,
+                        y: ptY,
+                        date: pt.date,
+                        cumulativeTotal: pt.cumulativeTotal,
+                        amount: pt.amount,
+                        donor: pt.donation?.displayName || t('anonymous'),
+                        message: pt.donation?.message,
+                        milestone: pt.unlockedMilestones[0],
+                        isMilestoneHit: pt.unlockedMilestones.length > 0
+                      });
+                    }}
+                  />
+                );
+              })}
+            </>
+          )}
+
+          {/* VIEW MODE 2: MONTHLY BREAKDOWN BARS */}
+          {viewMode === 'monthly' && (
+            <>
+              {monthlyData.map((m, idx) => {
+                const barSlotW = plotW / 12;
+                const barW = Math.max(14, barSlotW * 0.72);
+                const barX = padL + idx * barSlotW + (barSlotW - barW) / 2;
+                const barH = (m.amount / maxY) * plotH;
+                const barY = padT + plotH - barH;
+
+                return (
+                  <g key={`bar-${idx}`}>
+                    <rect
+                      x={barX}
+                      y={barY}
+                      width={barW}
+                      height={Math.max(2, barH)}
+                      rx="3"
+                      fill={m.amount > 0 ? (config.successColor || '#00ff00') : hexToRgba(config.textColor, 0.1)}
+                      opacity={m.amount > 0 ? 0.85 : 0.4}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => {
+                        setHoveredPoint({
+                          x: barX + barW / 2,
+                          y: barY,
+                          date: new Date(campaignYear, idx, 15),
+                          cumulativeTotal: m.amount,
+                          monthName: m.fullName,
+                          monthCount: m.count
+                        });
+                      }}
+                    />
+                    {m.amount > 0 && (
+                      <text
+                        x={barX + barW / 2}
+                        y={barY - 6}
+                        textAnchor="middle"
+                        fill={config.textColor}
+                        fontSize="9"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                      >
+                        {currencyPrefix}{Math.round(m.amount)}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </>
+          )}
+
+          {/* EMPTY STATE IF NO DONATIONS */}
+          {sortedYearDonations.length === 0 && (
+            <text
+              x={padL + plotW / 2}
+              y={padT + plotH / 2}
+              textAnchor="middle"
+              fill={effSecondaryTextColor}
+              fontSize="12"
+              fontFamily={config.fontFamily}
+            >
+              {t('noDonationsThisYear', { year: String(campaignYear) })}
+            </text>
+          )}
+        </svg>
+
+        {/* FLOATING RETRO TOOLTIP */}
+        {hoveredPoint && (
+          <div style={{
+            position: 'absolute',
+            left: `${Math.min(hoveredPoint.x, svgW - 220)}px`,
+            top: `${Math.max(10, hoveredPoint.y - 85)}px`,
+            backgroundColor: hexToRgba(config.panelColor || '#1a1a1a', 0.95),
+            border: `1px solid ${hoveredPoint.isMilestoneHit ? config.successColor : effHighlightColor}`,
+            boxShadow: `0 4px 15px rgba(0,0,0,0.7), 0 0 10px ${hexToRgba(hoveredPoint.isMilestoneHit ? config.successColor : effHighlightColor, 0.4)}`,
+            borderRadius: '6px',
+            padding: '10px 12px',
+            pointerEvents: 'none',
+            zIndex: 10,
+            maxWidth: '260px',
+            fontSize: '0.78rem',
+            lineHeight: 1.4,
+            color: config.textColor,
+            fontFamily: config.fontFamily
+          }}>
+            {hoveredPoint.monthName ? (
+              <>
+                <div style={{ fontWeight: 'bold', color: effHighlightColor, marginBottom: '2px' }}>
+                  📅 {hoveredPoint.monthName}
+                </div>
+                <div>{t('totalAtTime')}: <strong>{currencyPrefix}{hoveredPoint.cumulativeTotal.toFixed(2)}</strong></div>
+                <div style={{ color: effSecondaryTextColor }}>{hoveredPoint.monthCount} {t('donations')}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '0.72rem', color: effSecondaryTextColor, marginBottom: '4px' }}>
+                  📅 {hoveredPoint.date?.toLocaleDateString()}
+                </div>
+                {hoveredPoint.donor && (
+                  <div style={{ fontWeight: 'bold', color: config.textColor }}>
+                    👤 {hoveredPoint.donor}: <span style={{ color: config.successColor }}>{currencyPrefix}{hoveredPoint.amount?.toFixed(2)}</span>
+                  </div>
+                )}
+                <div>
+                  {t('totalAtTime')}: <strong>{currencyPrefix}{hoveredPoint.cumulativeTotal.toFixed(2)}</strong>
+                </div>
+                {hoveredPoint.milestone && (
+                  <div style={{
+                    marginTop: '6px',
+                    paddingTop: '6px',
+                    borderTop: `1px dashed ${effDividerColor}`,
+                    color: '#ffea00',
+                    fontWeight: 'bold'
+                  }}>
+                    🏆 {t('milestoneUnlocked')}: {hoveredPoint.milestone.description} ({currencyPrefix}{convertAmount(hoveredPoint.milestone.fundraisingGoal).toFixed(0)})
+                  </div>
+                )}
+                {hoveredPoint.message && (
+                  <div style={{ marginTop: '4px', fontStyle: 'italic', color: effSecondaryTextColor, fontSize: '0.72rem' }}>
+                    "{hoveredPoint.message.slice(0, 60)}{hoveredPoint.message.length > 60 ? '...' : ''}"
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      </>
+    )}
+    </div>
+  );
+};
+
 interface TeamDashboardViewProps {
   styles: any;
   config: any;
@@ -712,6 +1627,7 @@ interface TeamDashboardViewProps {
   participantGoal: number;
   selectedAccountId: string;
   setSelectedAccountId: (id: string) => void;
+  milestones?: any[];
   t: (key: string, vars?: any) => string;
   isOverlay?: boolean;
   effHeaderColor: string;
@@ -747,6 +1663,7 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
   participantGoal,
   selectedAccountId,
   setSelectedAccountId,
+  milestones = [],
   t,
   isOverlay = false,
   effHeaderColor,
@@ -773,6 +1690,7 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
   const [accountSearch, setAccountSearch] = useState('');
   const [fetchedAccounts, setFetchedAccounts] = useState<Record<string, { donations: any[]; total: number; goal: number; name: string }>>({});
   const [loadingAccount, setLoadingAccount] = useState(false);
+  const [teamGraphScope, setTeamGraphScope] = useState<'team' | 'account'>('team');
 
   // Active account ID defaults to the current participantId or first team participant if participant is not in team
   const activeAccountId = selectedAccountId || (
@@ -1027,6 +1945,98 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
             </span>
           </span>
         </div>
+      </div>
+
+      {/* ANNUAL PROGRESS GRAPH (TEAM & MEMBER TOGGLE) */}
+      <div style={{ marginBottom: '1.5rem', width: '100%' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '10px',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: '0.8rem', color: effSecondaryTextColor, fontWeight: 'bold' }}>
+            {t('annualProgress')}:
+          </span>
+          <button
+            type="button"
+            onClick={() => setTeamGraphScope('team')}
+            style={{
+              ...styles.button,
+              margin: 0,
+              padding: '6px 14px',
+              fontSize: '0.78rem',
+              backgroundColor: teamGraphScope === 'team' ? effPrimaryButtonBgColor : config.panelColor,
+              color: teamGraphScope === 'team' ? config.buttonTextColor : config.textColor,
+              border: `1px solid ${teamGraphScope === 'team' ? effHighlightColor : effDividerColor}`,
+              borderRadius: '4px'
+            }}
+          >
+            👥 {t('viewEntireTeam')} ({teamName || 'Team'})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTeamGraphScope('account')}
+            style={{
+              ...styles.button,
+              margin: 0,
+              padding: '6px 14px',
+              fontSize: '0.78rem',
+              backgroundColor: teamGraphScope === 'account' ? effPrimaryButtonBgColor : config.panelColor,
+              color: teamGraphScope === 'account' ? config.buttonTextColor : config.textColor,
+              border: `1px solid ${teamGraphScope === 'account' ? effHighlightColor : effDividerColor}`,
+              borderRadius: '4px'
+            }}
+          >
+            👤 {t('viewActiveMember')} ({activeAccountName})
+          </button>
+        </div>
+
+        {teamGraphScope === 'team' ? (
+          <AnnualProgressGraph
+            styles={styles}
+            config={config}
+            donations={teamDonations}
+            milestones={[]}
+            goal={teamGoal}
+            totalRaised={teamTotalRaised}
+            currencyPrefix={currencyPrefix}
+            convertAmount={convertAmount}
+            t={t}
+            entityName={teamName || t('entireTeam')}
+            isTeam={true}
+            effHighlightColor={effHighlightColor}
+            effHeaderColor={effHeaderColor}
+            effSecondaryTextColor={effSecondaryTextColor}
+            effDividerColor={effDividerColor}
+            effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+            effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+            hexToRgba={hexToRgba}
+          />
+        ) : (
+          <AnnualProgressGraph
+            styles={styles}
+            config={config}
+            donations={rawAccountDonations}
+            milestones={activeAccountId === String(participantId) ? milestones : []}
+            goal={activeAccountGoal}
+            totalRaised={activeAccountTotal}
+            currencyPrefix={currencyPrefix}
+            convertAmount={convertAmount}
+            t={t}
+            entityName={activeAccountName}
+            isTeam={false}
+            effHighlightColor={effHighlightColor}
+            effHeaderColor={effHeaderColor}
+            effSecondaryTextColor={effSecondaryTextColor}
+            effDividerColor={effDividerColor}
+            effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+            effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+            hexToRgba={hexToRgba}
+          />
+        )}
       </div>
 
       {/* 2 COLUMNS LAYOUT */}
@@ -1924,6 +2934,95 @@ const QRCodeOverlay = ({
   );
 };
 
+export interface GraphOverlayProps {
+  styles: any;
+  config: any;
+  donations: any[];
+  milestones?: any[];
+  goal: number;
+  totalRaised: number;
+  currencyPrefix: string;
+  convertAmount: (amount: number) => number;
+  t: (key: string, vars?: any) => string;
+  entityName?: string;
+  isTeam?: boolean;
+  effHighlightColor?: string;
+  effHeaderColor?: string;
+  effSecondaryTextColor?: string;
+  effDividerColor?: string;
+  effPrimaryButtonBgColor?: string;
+  effSecondaryButtonBgColor?: string;
+  hexToRgba: (hex: string, alpha: number) => string;
+  isTransparent?: boolean;
+}
+
+const GraphOverlay: React.FC<GraphOverlayProps> = ({
+  styles,
+  config,
+  donations = [],
+  milestones = [],
+  goal = 0,
+  totalRaised = 0,
+  currencyPrefix = '$',
+  convertAmount = (a: number) => a,
+  t,
+  entityName = '',
+  isTeam = false,
+  effHighlightColor = '#00ffff',
+  effHeaderColor = '#00ffff',
+  effSecondaryTextColor = '#a0a0a0',
+  effDividerColor = '#333333',
+  effPrimaryButtonBgColor = '#ff00ff',
+  effSecondaryButtonBgColor = '#333333',
+  hexToRgba = (h: string, a: number) => h,
+  isTransparent = false
+}) => {
+  return (
+    <div style={{
+      width: '100vw',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      padding: '16px',
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '960px',
+        boxSizing: 'border-box' as const
+      }}>
+        <AnnualProgressGraph
+          styles={styles}
+          config={config}
+          donations={donations}
+          milestones={milestones}
+          goal={goal}
+          totalRaised={totalRaised}
+          currencyPrefix={currencyPrefix}
+          convertAmount={convertAmount}
+          t={t}
+          entityName={entityName}
+          isTeam={isTeam}
+          effHighlightColor={effHighlightColor}
+          effHeaderColor={effHeaderColor}
+          effSecondaryTextColor={effSecondaryTextColor}
+          effDividerColor={effDividerColor}
+          effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+          effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+          hexToRgba={hexToRgba}
+          isInitiallyCollapsed={false}
+          isOverlay={true}
+          isTransparent={isTransparent}
+        />
+      </div>
+    </div>
+  );
+};
+
 const CollapsibleSection = ({ title, children, isInitiallyCollapsed = true, styles }: { title: string, children: React.ReactNode, isInitiallyCollapsed?: boolean, styles: any }) => {
     const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -1974,5 +3073,7 @@ export {
     CelebrationOverlay,
     QRCodeSvg,
     QRCodeOverlay,
-    CollapsibleSection
+    CollapsibleSection,
+    AnnualProgressGraph,
+    GraphOverlay
 };

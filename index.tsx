@@ -52,7 +52,9 @@ import {
   CelebrationOverlay,
   QRCodeSvg,
   QRCodeOverlay,
-  CollapsibleSection
+  CollapsibleSection,
+  AnnualProgressGraph,
+  GraphOverlay
 } from "./overlays.js";
 import {
   useExtraLifeData,
@@ -181,7 +183,8 @@ const App = () => {
   const [teamIdInput, setTeamIdInput] = useState<string>(initialLoadedConfig.teamId || '');
   const [websiteTotalInput, setWebsiteTotalInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
-  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-header' | 'team-donations' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode'>('none');
+  const [overlayType, setOverlayType] = useState<'none' | 'progress' | 'notifications' | 'milestone' | 'team' | 'team-header' | 'team-donations' | 'team-dashboard' | 'celebration' | 'schedule' | 'sponsors' | 'text' | 'qrcode' | 'graph'>('none');
+  const [isTeamGraphOverlay, setIsTeamGraphOverlay] = useState<boolean>(false);
   const [dashboardView, setDashboardView] = useState<'participant' | 'team' | 'settings'>('participant');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [formError, setFormError] = useState('');
@@ -481,13 +484,21 @@ const App = () => {
     const overlayParam = params.get('overlay');
     const rootEl = document.getElementById('root');
 
-    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-header', 'team-donations', 'team-list', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text', 'qrcode', 'qr'].includes(overlayParam)) {
+    if (overlayParam && ['progress', 'notifications', 'milestone', 'team', 'team-header', 'team-donations', 'team-list', 'team-dashboard', 'celebration', 'schedule', 'sponsors', 'text', 'qrcode', 'qr', 'graph', 'annual-graph', 'team-graph'].includes(overlayParam)) {
       if (overlayParam === 'qr') {
         setOverlayType('qrcode');
       } else if (overlayParam === 'team-list') {
         setOverlayType('team-donations');
       } else if (overlayParam === 'team') {
         setOverlayType('team-header');
+      } else if (overlayParam === 'team-graph') {
+        setOverlayType('graph');
+        setIsTeamGraphOverlay(true);
+      } else if (overlayParam === 'graph' || overlayParam === 'annual-graph') {
+        setOverlayType('graph');
+        if (params.get('team') === 'true') {
+          setIsTeamGraphOverlay(true);
+        }
       } else {
         setOverlayType(overlayParam as any);
       }
@@ -922,7 +933,7 @@ const App = () => {
     card: { backgroundColor: config.panelColor, border: `2px solid ${config.panelBorderColor}`, padding: '15px', display: 'flex', flexDirection: 'column' as const, gap: '10px' },
     // Dashboard Specific Styles
     dashboardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem', width: '100%', textAlign: 'left' as const, alignItems: 'start' },
-    statHero: { backgroundColor: config.panelColor, border: `4px solid ${config.successColor}`, padding: '20px', textAlign: 'center' as const, marginBottom: '2rem', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '10px' },
+    statHero: { backgroundColor: config.panelColor, border: `4px solid ${config.successColor}`, padding: '20px', textAlign: 'center' as const, marginBottom: 0, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '10px' },
     bigStat: { fontSize: '3rem', color: config.successColor, textShadow: `3px 3px ${config.backgroundColor}`, margin: 0 },
     secondaryStat: { fontSize: '1rem', color: effSecondaryTextColor, margin: 0 },
     feedContainer: { maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' as const, paddingRight: '10px' }
@@ -1011,7 +1022,7 @@ const App = () => {
         </div>
       )}
 
-      <div style={overlayType === 'sponsors' || overlayType === 'text' || overlayType === 'team-donations' || overlayType === 'team-dashboard' ? {width: '100%'} : styles.container}>
+      <div style={overlayType === 'sponsors' || overlayType === 'text' || overlayType === 'team-donations' || overlayType === 'team-dashboard' || overlayType === 'graph' ? {width: '100%'} : styles.container}>
         {overlayType === 'none' && (
           <>
             <HeaderBar
@@ -1053,6 +1064,7 @@ const App = () => {
                   participantGoal={goal}
                   selectedAccountId={selectedAccountId}
                   setSelectedAccountId={setSelectedAccountId}
+                  milestones={milestones}
                   t={t}
                   isOverlay={false}
                   effHeaderColor={effHeaderColor}
@@ -1123,6 +1135,20 @@ const App = () => {
                                     </button>
                                     <button type="button" onClick={() => handleCopyUrl('team-dashboard')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
                                         📋 {copyFeedback === 'team-dashboard' ? t('copied') : t('copyLink')}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: hexToRgba(config.panelColor, 0.6), padding: '8px 12px', border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`, gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: config.textColor }}>
+                                    📈 {t('teamGraphOverlay')}
+                                </span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button type="button" onClick={() => openOverlay('team-graph', 'width=880,height=420')} style={{...styles.button, backgroundColor: config.panelColor, border: `1px solid ${effSecondaryButtonBgColor}`, color: config.textColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        ↗ {t('openPopup')}
+                                    </button>
+                                    <button type="button" onClick={() => handleCopyUrl('team-graph')} style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, margin: 0, fontSize: '0.75rem', padding: '6px 10px' }}>
+                                        📋 {copyFeedback === 'team-graph' ? t('copied') : t('copyLink')}
                                     </button>
                                 </div>
                             </div>
@@ -1335,97 +1361,121 @@ const App = () => {
                 </div>
               </div>
             ) : (
-              <>
-            {/* HERO STATS SECTION */}
-            <HeroStatsView
-              styles={styles}
-              totalRaised={totalRaised}
-              goal={goal}
-              progressPercentage={progressPercentage}
-              timeDisplay={timeDisplay}
-              currencyPrefix={currencyPrefix}
-              convertAmount={convertAmount}
-              t={t}
-            />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+                {/* HERO STATS SECTION */}
+                <HeroStatsView
+                  styles={styles}
+                  totalRaised={totalRaised}
+                  goal={goal}
+                  progressPercentage={progressPercentage}
+                  timeDisplay={timeDisplay}
+                  currencyPrefix={currencyPrefix}
+                  convertAmount={convertAmount}
+                  t={t}
+                />
 
-            {/* MAIN DASHBOARD GRID */}
-            <div style={styles.dashboardGrid}>
-                {/* COLUMN 1: LIVE FEED */}
-                <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                    <DonationsFeedCard
-                      styles={styles}
-                      sortedDonations={sortedDonations}
-                      currencyPrefix={currencyPrefix}
-                      convertAmount={convertAmount}
-                      effHighlightColor={effHighlightColor}
-                      effDividerColor={effDividerColor}
-                      config={config}
-                      t={t}
-                    />
+                {/* ANNUAL PROGRESS & MILESTONES GRAPH */}
+                <div style={{ width: '100%' }}>
+                  <AnnualProgressGraph
+                    styles={styles}
+                    config={config}
+                    donations={donations}
+                    milestones={milestones}
+                    goal={goal}
+                    totalRaised={totalRaised}
+                    currencyPrefix={currencyPrefix}
+                    convertAmount={convertAmount}
+                    t={t}
+                    entityName={participantName || config.participantId || 'Participant'}
+                    isTeam={false}
+                    effHighlightColor={effHighlightColor}
+                    effHeaderColor={effHeaderColor}
+                    effSecondaryTextColor={effSecondaryTextColor}
+                    effDividerColor={effDividerColor}
+                    effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                    effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                    hexToRgba={hexToRgba}
+                  />
                 </div>
 
-                {/* COLUMN 2: CONTROLS & OVERLAYS */}
-                <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-                     <QuickActionsCard
-                       styles={styles}
-                       effSecondaryButtonBgColor={effSecondaryButtonBgColor}
-                       config={config}
-                       onTestDonation={handleTestDonation}
-                       onManualSync={handleManualSync}
-                       onClearOverlays={handleClearOverlays}
-                       t={t}
-                     />
-                     <SecondaryStatsCard
-                       styles={styles}
-                       effSecondaryTextColor={effSecondaryTextColor}
-                       teamTotalRaised={teamTotalRaised}
-                       sortedDonations={sortedDonations}
-                       currencyPrefix={currencyPrefix}
-                       convertAmount={convertAmount}
-                       t={t}
-                     />
-                     <QrQuickCard
-                       styles={styles}
-                       config={config}
-                       effHighlightColor={effHighlightColor}
-                       effHeaderColor={effHeaderColor}
-                       effSecondaryTextColor={effSecondaryTextColor}
-                       effDividerColor={effDividerColor}
-                       effPrimaryButtonBgColor={effPrimaryButtonBgColor}
-                       effSecondaryButtonBgColor={effSecondaryButtonBgColor}
-                       effectiveQrUrl={effectiveQrUrl}
-                       activeParticipantId={activeParticipantId}
-                       copyFeedback={copyFeedback}
-                       hexToRgba={hexToRgba}
-                       onCopyQrLink={handleCopyQrLink}
-                       openOverlay={openOverlay}
-                       t={t}
-                     />
-                     <div style={styles.card}>
-                         <OverlayLinksSection
+                {/* MAIN DASHBOARD GRID */}
+                <div style={styles.dashboardGrid}>
+                    {/* COLUMN 1: LIVE FEED */}
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                        <DonationsFeedCard
+                          styles={styles}
+                          sortedDonations={sortedDonations}
+                          currencyPrefix={currencyPrefix}
+                          convertAmount={convertAmount}
+                          effHighlightColor={effHighlightColor}
+                          effDividerColor={effDividerColor}
+                          config={config}
+                          t={t}
+                        />
+                    </div>
+
+                    {/* COLUMN 2: CONTROLS & OVERLAYS */}
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                         <QuickActionsCard
                            styles={styles}
-                           config={config}
-                           effPrimaryButtonBgColor={effPrimaryButtonBgColor}
                            effSecondaryButtonBgColor={effSecondaryButtonBgColor}
-                           hexToRgba={hexToRgba}
-                           copyFeedback={copyFeedback}
-                           openOverlay={openOverlay}
-                           handleCopyUrl={handleCopyUrl}
+                           config={config}
+                           onTestDonation={handleTestDonation}
+                           onManualSync={handleManualSync}
+                           onClearOverlays={handleClearOverlays}
                            t={t}
                          />
-                     </div>
-                     <div style={styles.card}>
-                          <button
-                             type="button"
-                             onClick={() => setDashboardView('settings')}
-                             style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, width: '100%', margin: 0, padding: '12px', fontSize: '0.95rem' }}
-                           >
-                             ⚙️ {t('settingsTab')}
-                          </button>
-                     </div>
+                         <SecondaryStatsCard
+                           styles={styles}
+                           effSecondaryTextColor={effSecondaryTextColor}
+                           teamTotalRaised={teamTotalRaised}
+                           sortedDonations={sortedDonations}
+                           currencyPrefix={currencyPrefix}
+                           convertAmount={convertAmount}
+                           t={t}
+                         />
+                         <QrQuickCard
+                           styles={styles}
+                           config={config}
+                           effHighlightColor={effHighlightColor}
+                           effHeaderColor={effHeaderColor}
+                           effSecondaryTextColor={effSecondaryTextColor}
+                           effDividerColor={effDividerColor}
+                           effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                           effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                           effectiveQrUrl={effectiveQrUrl}
+                           activeParticipantId={activeParticipantId}
+                           copyFeedback={copyFeedback}
+                           hexToRgba={hexToRgba}
+                           onCopyQrLink={handleCopyQrLink}
+                           openOverlay={openOverlay}
+                           t={t}
+                         />
+                         <div style={styles.card}>
+                             <OverlayLinksSection
+                               styles={styles}
+                               config={config}
+                               effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                               effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                               hexToRgba={hexToRgba}
+                               copyFeedback={copyFeedback}
+                               openOverlay={openOverlay}
+                               handleCopyUrl={handleCopyUrl}
+                               t={t}
+                             />
+                         </div>
+                         <div style={styles.card}>
+                              <button
+                                 type="button"
+                                 onClick={() => setDashboardView('settings')}
+                                 style={{...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, width: '100%', margin: 0, padding: '12px', fontSize: '0.95rem' }}
+                               >
+                                 ⚙️ {t('settingsTab')}
+                              </button>
+                         </div>
+                    </div>
                 </div>
-            </div>
-              </>
+              </div>
             )}
           </>
         )}
@@ -1557,6 +1607,29 @@ const App = () => {
                 panelColor={config.panelColor}
                 panelBorderColor={config.panelBorderColor}
                 t={t}
+              />
+            )}
+            {overlayType === 'graph' && (
+              <GraphOverlay
+                styles={styles}
+                config={config}
+                donations={isTeamGraphOverlay ? teamDonations : donations}
+                milestones={isTeamGraphOverlay ? [] : milestones}
+                goal={isTeamGraphOverlay ? teamGoal : goal}
+                totalRaised={isTeamGraphOverlay ? teamTotalRaised : totalRaised}
+                currencyPrefix={currencyPrefix}
+                convertAmount={convertAmount}
+                t={t}
+                entityName={isTeamGraphOverlay ? (teamName || t('teamDashboardTitle')) : participantName}
+                isTeam={isTeamGraphOverlay}
+                effHighlightColor={effHighlightColor}
+                effHeaderColor={effHeaderColor}
+                effSecondaryTextColor={effSecondaryTextColor}
+                effDividerColor={effDividerColor}
+                effPrimaryButtonBgColor={effPrimaryButtonBgColor}
+                effSecondaryButtonBgColor={effSecondaryButtonBgColor}
+                hexToRgba={hexToRgba}
+                isTransparent={new URLSearchParams(window.location.search).get('transparent') === 'true' || Boolean(config.graphTransparentBg)}
               />
             )}
           </>

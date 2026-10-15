@@ -615,17 +615,9 @@ export const OverlayLinksSection = ({
     fn: () => openOverlay('milestone', 'width=800,height=180'),
     type: 'milestone'
   }, {
-    title: t('teamHeaderOverlay'),
-    fn: () => openOverlay('team-header', 'width=850,height=220'),
-    type: 'team-header'
-  }, {
-    title: t('teamDonationsOverlay'),
-    fn: () => openOverlay('team-donations', 'width=500,height=750'),
-    type: 'team-donations'
-  }, {
-    title: t('teamDashboardOverlay'),
-    fn: () => openOverlay('team-dashboard', 'width=1280,height=850'),
-    type: 'team-dashboard'
+    title: t('graphOverlay'),
+    fn: () => openOverlay('graph', 'width=880,height=420'),
+    type: 'graph'
   }, {
     title: t('qrCodeOverlayLink'),
     fn: () => openOverlay('qrcode', 'width=450,height=520'),

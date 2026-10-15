@@ -650,6 +650,858 @@ const TeamDonationsOverlay = ({
     }, "\"", d.message, "\""));
   })));
 };
+
+// ==========================================
+// ANNUAL PROGRESS GRAPH COMPONENT
+// ==========================================
+
+const AnnualProgressGraph = ({
+  styles,
+  config,
+  donations = [],
+  milestones = [],
+  goal = 0,
+  totalRaised = 0,
+  currencyPrefix = '$',
+  convertAmount = a => a,
+  t,
+  entityName = '',
+  isTeam = false,
+  effHighlightColor = '#00ffff',
+  effHeaderColor = '#00ffff',
+  effSecondaryTextColor = '#a0a0a0',
+  effDividerColor = '#333333',
+  effPrimaryButtonBgColor = '#ff00ff',
+  effSecondaryButtonBgColor = '#333333',
+  hexToRgba = (h, a) => h,
+  isInitiallyCollapsed = true,
+  isOverlay = false,
+  isTransparent = false
+}) => {
+  const currentYear = new Date().getFullYear();
+  const [isCollapsed, setIsCollapsed] = useState(isOverlay ? false : isInitiallyCollapsed);
+
+  // Automatically derive campaign year from donation timestamps or default to current year
+  const campaignYear = useMemo(() => {
+    if (donations && donations.length > 0) {
+      for (const d of donations) {
+        if (d?.createdDateUTC) {
+          const yr = new Date(d.createdDateUTC).getFullYear();
+          if (!isNaN(yr) && yr > 2000 && yr < 2100) return yr;
+        }
+      }
+    }
+    return currentYear;
+  }, [donations, currentYear]);
+  const [viewMode, setViewMode] = useState('cumulative');
+  const [showMilestones, setShowMilestones] = useState(true);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+
+  // Filter & sort donations chronologically (oldest to newest)
+  const sortedYearDonations = useMemo(() => {
+    return (donations || []).filter(d => Boolean(d?.createdDateUTC)).sort((a, b) => new Date(a.createdDateUTC).getTime() - new Date(b.createdDateUTC).getTime());
+  }, [donations]);
+
+  // Year Total
+  const yearTotalAmount = useMemo(() => {
+    return sortedYearDonations.reduce((acc, d) => acc + convertAmount(d.amount || 0), 0);
+  }, [sortedYearDonations, convertAmount]);
+
+  // 12-month breakdown
+  const monthlyData = useMemo(() => {
+    const months = Array.from({
+      length: 12
+    }, (_, i) => {
+      const d = new Date(campaignYear, i, 1);
+      return {
+        monthIndex: i,
+        name: d.toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', {
+          month: 'short'
+        }),
+        fullName: d.toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', {
+          month: 'long'
+        }),
+        amount: 0,
+        count: 0
+      };
+    });
+    sortedYearDonations.forEach(d => {
+      const dt = new Date(d.createdDateUTC);
+      const m = dt.getMonth();
+      if (m >= 0 && m < 12) {
+        months[m].amount += convertAmount(d.amount || 0);
+        months[m].count += 1;
+      }
+    });
+    return months;
+  }, [sortedYearDonations, convertAmount, config.language, campaignYear]);
+
+  // Top month
+  const topMonth = useMemo(() => {
+    let top = monthlyData[0];
+    monthlyData.forEach(m => {
+      if (m.amount > top.amount) top = m;
+    });
+    return top.amount > 0 ? top : null;
+  }, [monthlyData]);
+
+  // Milestones list
+  const effectiveMilestones = useMemo(() => {
+    let list = [];
+    if (milestones && milestones.length > 0) {
+      list = milestones.map(m => ({
+        milestoneID: m.milestoneID,
+        fundraisingGoal: m.fundraisingGoal,
+        description: m.description || `Milestone ${currencyPrefix}${convertAmount(m.fundraisingGoal).toFixed(0)}`
+      }));
+    } else if (goal > 0) {
+      list = [{
+        milestoneID: 'm25',
+        fundraisingGoal: Math.round(goal * 0.25),
+        description: '25% Goal'
+      }, {
+        milestoneID: 'm50',
+        fundraisingGoal: Math.round(goal * 0.50),
+        description: '50% Halfway'
+      }, {
+        milestoneID: 'm75',
+        fundraisingGoal: Math.round(goal * 0.75),
+        description: '75% Stretch'
+      }, {
+        milestoneID: 'm100',
+        fundraisingGoal: goal,
+        description: t('campaignGoal')
+      }];
+    }
+    if (goal > 0 && !list.some(m => Math.abs(m.fundraisingGoal - goal) < 1)) {
+      list.push({
+        milestoneID: 'goal',
+        fundraisingGoal: goal,
+        description: t('campaignGoal')
+      });
+    }
+    return list.sort((a, b) => a.fundraisingGoal - b.fundraisingGoal);
+  }, [milestones, goal, currencyPrefix, convertAmount, t]);
+
+  // Timeline points & milestone hit calculation
+  const {
+    timelinePoints,
+    milestoneHits
+  } = useMemo(() => {
+    let running = 0;
+    const pts = [];
+    const hits = new Map();
+    sortedYearDonations.forEach(d => {
+      const prev = running;
+      const amt = convertAmount(d.amount || 0);
+      running += amt;
+      const dDate = new Date(d.createdDateUTC);
+      const newlyUnlocked = [];
+      effectiveMilestones.forEach(m => {
+        const mGoal = convertAmount(m.fundraisingGoal);
+        const mKey = m.milestoneID || String(m.fundraisingGoal);
+        if (prev < mGoal && running >= mGoal && !hits.has(mKey)) {
+          hits.set(mKey, {
+            milestone: m,
+            hitDate: dDate,
+            donation: d,
+            cumulativeTotal: running
+          });
+          newlyUnlocked.push(m);
+        }
+      });
+      pts.push({
+        date: dDate,
+        timestamp: dDate.getTime(),
+        amount: amt,
+        cumulativeTotal: running,
+        donation: d,
+        unlockedMilestones: newlyUnlocked
+      });
+    });
+    return {
+      timelinePoints: pts,
+      milestoneHits: hits
+    };
+  }, [sortedYearDonations, convertAmount, effectiveMilestones]);
+
+  // Next milestone
+  const currentTotalCalculated = Math.max(yearTotalAmount, totalRaised > 0 ? convertAmount(totalRaised) : 0);
+  const nextMilestone = useMemo(() => {
+    return effectiveMilestones.find(m => convertAmount(m.fundraisingGoal) > currentTotalCalculated) || null;
+  }, [effectiveMilestones, currentTotalCalculated, convertAmount]);
+
+  // SVG Chart Geometry
+  const svgW = 840;
+  const svgH = 340;
+  const padL = 75;
+  const padR = 150;
+  const padT = 35;
+  const padB = 45;
+  const plotW = svgW - padL - padR;
+  const plotH = svgH - padT - padB;
+  const maxMilestoneVal = effectiveMilestones.length > 0 ? Math.max(...effectiveMilestones.map(m => convertAmount(m.fundraisingGoal))) : 0;
+  const goalVal = convertAmount(goal || 0);
+  const ceiling = Math.max(currentTotalCalculated, goalVal, maxMilestoneVal, 100);
+  const maxY = Math.ceil(ceiling * 1.15 / 50) * 50 || 100;
+  const yearStart = new Date(campaignYear, 0, 1).getTime();
+  const yearEnd = new Date(campaignYear, 11, 31, 23, 59, 59).getTime();
+  const getX = tMs => {
+    const frac = Math.max(0, Math.min(1, (tMs - yearStart) / Math.max(1, yearEnd - yearStart)));
+    return padL + frac * plotW;
+  };
+  const getY = val => {
+    const frac = Math.max(0, Math.min(1, val / maxY));
+    return padT + plotH - frac * plotH;
+  };
+
+  // Gridlines
+  const gridSteps = 4;
+  const gridLines = Array.from({
+    length: gridSteps + 1
+  }, (_, i) => {
+    const val = maxY / gridSteps * i;
+    return {
+      val,
+      y: getY(val)
+    };
+  });
+
+  // Cumulative Paths
+  const {
+    linePath,
+    areaPath
+  } = useMemo(() => {
+    if (timelinePoints.length === 0) {
+      return {
+        linePath: '',
+        areaPath: ''
+      };
+    }
+    const startX = padL;
+    const startY = padT + plotH;
+    let pathD = `M ${startX} ${startY}`;
+    let lastX = startX;
+    let lastY = startY;
+    timelinePoints.forEach(pt => {
+      const x = getX(pt.timestamp);
+      const y = getY(pt.cumulativeTotal);
+      pathD += ` L ${x} ${y}`;
+      lastX = x;
+      lastY = y;
+    });
+
+    // If within current year, extend line horizontally to current date
+    const now = Date.now();
+    if (now > yearStart && now < yearEnd) {
+      const todayX = getX(now);
+      if (todayX > lastX) {
+        pathD += ` L ${todayX} ${lastY}`;
+        lastX = todayX;
+      }
+    }
+    const areaD = `${pathD} L ${lastX} ${padT + plotH} L ${startX} ${padT + plotH} Z`;
+    return {
+      linePath: pathD,
+      areaPath: areaD
+    };
+  }, [timelinePoints, yearStart, yearEnd, padL, padT, plotH]);
+
+  // Unique Grad ID for Theme
+  const gradId = useMemo(() => `annualProgressGrad_${Math.random().toString(36).substr(2, 9)}`, []);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...styles.card,
+      backgroundColor: isTransparent ? 'transparent' : styles.card?.backgroundColor || config.panelColor,
+      border: isTransparent ? isOverlay ? `1px solid ${hexToRgba(effHighlightColor, 0.4)}` : 'none' : `2px solid ${effHighlightColor}`,
+      boxShadow: isOverlay && !isTransparent ? '0 8px 32px rgba(0,0,0,0.5)' : 'none',
+      borderRadius: isOverlay ? '8px' : 0,
+      padding: isOverlay ? '16px 20px' : styles.card?.padding || '15px',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: isCollapsed ? '0' : '14px',
+      width: '100%',
+      position: 'relative',
+      fontFamily: config.fontFamily
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '12px',
+      borderBottom: isCollapsed ? 'none' : `1px dashed ${effDividerColor}`,
+      paddingBottom: isCollapsed ? '0' : '10px',
+      cursor: isOverlay ? 'default' : 'pointer',
+      userSelect: 'none',
+      width: '100%'
+    },
+    onClick: () => !isOverlay && setIsCollapsed(prev => !prev)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      flexWrap: 'wrap'
+    }
+  }, !isOverlay && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1rem',
+      color: effHighlightColor,
+      transition: 'transform 0.2s ease-in-out',
+      transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+      display: 'inline-block'
+    }
+  }, "▸"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.2rem'
+    }
+  }, "📈"), /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      color: effHeaderColor,
+      fontSize: '1.1rem',
+      letterSpacing: '0.5px'
+    }
+  }, t('annualProgress')), entityName && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      backgroundColor: hexToRgba(effHighlightColor, 0.15),
+      color: effHighlightColor,
+      padding: '2px 8px',
+      border: `1px solid ${hexToRgba(effHighlightColor, 0.3)}`,
+      fontWeight: 'bold'
+    }
+  }, entityName), isCollapsed && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.8rem',
+      color: config.successColor,
+      fontWeight: 'bold',
+      marginLeft: '4px'
+    }
+  }, "• ", currencyPrefix, yearTotalAmount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: effSecondaryTextColor,
+      fontWeight: 'normal',
+      marginLeft: '6px'
+    }
+  }, "(", milestoneHits.size, "/", effectiveMilestones.length, " ", t('milestonesAchieved'), ")"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      flexWrap: 'wrap'
+    },
+    onClick: e => e.stopPropagation()
+  }, !isCollapsed && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'inline-flex',
+      backgroundColor: hexToRgba(config.backgroundColor, 0.6),
+      borderRadius: '4px',
+      padding: '2px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setViewMode('cumulative'),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '5px 10px',
+      fontSize: '0.72rem',
+      backgroundColor: viewMode === 'cumulative' ? effPrimaryButtonBgColor : 'transparent',
+      color: viewMode === 'cumulative' ? config.buttonTextColor : config.textColor,
+      border: 'none',
+      borderRadius: '3px'
+    }
+  }, "📈 ", t('cumulativeGrowth')), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setViewMode('monthly'),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '5px 10px',
+      fontSize: '0.72rem',
+      backgroundColor: viewMode === 'monthly' ? effPrimaryButtonBgColor : 'transparent',
+      color: viewMode === 'monthly' ? config.buttonTextColor : config.textColor,
+      border: 'none',
+      borderRadius: '3px'
+    }
+  }, "📊 ", t('monthlyBreakdown'))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowMilestones(prev => !prev),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '5px 10px',
+      fontSize: '0.72rem',
+      backgroundColor: showMilestones ? hexToRgba(config.successColor, 0.25) : config.panelColor,
+      border: `1px solid ${showMilestones ? config.successColor : effDividerColor}`,
+      color: showMilestones ? config.successColor : effSecondaryTextColor,
+      borderRadius: '4px'
+    }
+  }, "🎯 ", t('milestonesToggle'), ": ", showMilestones ? 'ON' : 'OFF')), !isOverlay && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setIsCollapsed(prev => !prev),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '5px 12px',
+      fontSize: '0.75rem',
+      backgroundColor: isCollapsed ? effPrimaryButtonBgColor : config.panelColor,
+      color: isCollapsed ? config.buttonTextColor : config.textColor,
+      border: `1px solid ${isCollapsed ? effHighlightColor : effDividerColor}`,
+      borderRadius: '4px'
+    }
+  }, isCollapsed ? `▸ ${t('showGraph')}` : `▾ ${t('hideGraph')}`))), !isCollapsed && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      backgroundColor: hexToRgba(config.panelColor, 0.6),
+      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+      padding: '10px 12px',
+      borderRadius: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      color: effSecondaryTextColor,
+      display: 'block',
+      textTransform: 'uppercase'
+    }
+  }, "💰 ", t('totalAtTime')), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.2rem',
+      fontWeight: 'bold',
+      color: config.successColor,
+      marginTop: '2px',
+      display: 'block'
+    }
+  }, currencyPrefix, yearTotalAmount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      backgroundColor: hexToRgba(config.panelColor, 0.6),
+      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+      padding: '10px 12px',
+      borderRadius: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      color: effSecondaryTextColor,
+      display: 'block',
+      textTransform: 'uppercase'
+    }
+  }, "🎯 ", t('milestonesAchieved')), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.2rem',
+      fontWeight: 'bold',
+      color: effHighlightColor,
+      marginTop: '2px',
+      display: 'block'
+    }
+  }, milestoneHits.size, " / ", effectiveMilestones.length, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      opacity: 0.8,
+      marginLeft: '6px',
+      color: effSecondaryTextColor
+    }
+  }, "(", effectiveMilestones.length > 0 ? Math.round(milestoneHits.size / effectiveMilestones.length * 100) : 0, "%)"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      backgroundColor: hexToRgba(config.panelColor, 0.6),
+      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+      padding: '10px 12px',
+      borderRadius: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      color: effSecondaryTextColor,
+      display: 'block',
+      textTransform: 'uppercase'
+    }
+  }, "🚀 ", t('nextMilestone')), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.9rem',
+      fontWeight: 'bold',
+      color: nextMilestone ? config.accentColor1 || '#ff00ff' : config.successColor,
+      marginTop: '2px',
+      display: 'block',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, nextMilestone ? `${currencyPrefix}${(convertAmount(nextMilestone.fundraisingGoal) - currentTotalCalculated).toFixed(0)} to ${nextMilestone.description.slice(0, 18)}` : t('allMilestonesReached'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      backgroundColor: hexToRgba(config.panelColor, 0.6),
+      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+      padding: '10px 12px',
+      borderRadius: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      color: effSecondaryTextColor,
+      display: 'block',
+      textTransform: 'uppercase'
+    }
+  }, "📅 ", t('topMonth')), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.05rem',
+      fontWeight: 'bold',
+      color: config.textColor,
+      marginTop: '2px',
+      display: 'block'
+    }
+  }, topMonth ? `${topMonth.name} (${currencyPrefix}${topMonth.amount.toFixed(0)})` : '—'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      width: '100%',
+      backgroundColor: hexToRgba(config.backgroundColor, 0.65),
+      border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`,
+      borderRadius: '6px',
+      overflow: 'visible',
+      padding: '8px 4px',
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: `0 0 ${svgW} ${svgH}`,
+    style: {
+      width: '100%',
+      height: 'auto',
+      display: 'block',
+      overflow: 'visible'
+    },
+    onMouseLeave: () => setHoveredPoint(null)
+  }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+    id: gradId,
+    x1: "0",
+    y1: "0",
+    x2: "0",
+    y2: "1"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: config.successColor || '#00ff00',
+    stopOpacity: "0.45"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "60%",
+    stopColor: effHighlightColor || '#00ffff',
+    stopOpacity: "0.18"
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: effHighlightColor || '#00ffff',
+    stopOpacity: "0.0"
+  })), /*#__PURE__*/React.createElement("filter", {
+    id: "glowFilter",
+    x: "-20%",
+    y: "-20%",
+    width: "140%",
+    height: "140%"
+  }, /*#__PURE__*/React.createElement("feGaussianBlur", {
+    stdDeviation: "3",
+    result: "blur"
+  }), /*#__PURE__*/React.createElement("feComposite", {
+    in: "SourceGraphic",
+    in2: "blur",
+    operator: "over"
+  }))), gridLines.map((gl, i) => /*#__PURE__*/React.createElement("g", {
+    key: i
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    y1: gl.y,
+    x2: padL + plotW,
+    y2: gl.y,
+    stroke: hexToRgba(config.textColor, 0.12),
+    strokeDasharray: "2,4"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: padL - 10,
+    y: gl.y + 4,
+    textAnchor: "end",
+    fill: effSecondaryTextColor,
+    fontSize: "10",
+    fontFamily: "monospace"
+  }, currencyPrefix, Math.round(gl.val)))), Array.from({
+    length: 12
+  }, (_, i) => {
+    const frac = (i + 0.5) / 12;
+    const x = padL + frac * plotW;
+    const lineX = padL + i / 12 * plotW;
+    const monthLabel = new Date(2026, i, 1).toLocaleString(config.language === 'fr' ? 'fr-FR' : 'en-US', {
+      month: 'narrow'
+    });
+    return /*#__PURE__*/React.createElement("g", {
+      key: i
+    }, i > 0 && /*#__PURE__*/React.createElement("line", {
+      x1: lineX,
+      y1: padT,
+      x2: lineX,
+      y2: padT + plotH,
+      stroke: hexToRgba(config.textColor, 0.06)
+    }), /*#__PURE__*/React.createElement("text", {
+      x: x,
+      y: padT + plotH + 20,
+      textAnchor: "middle",
+      fill: effSecondaryTextColor,
+      fontSize: "11",
+      fontWeight: "bold",
+      fontFamily: config.fontFamily
+    }, monthlyData[i]?.name || monthLabel));
+  }), showMilestones && effectiveMilestones.map(m => {
+    const mVal = convertAmount(m.fundraisingGoal);
+    const mY = getY(mVal);
+    if (mY < padT - 15 || mY > padT + plotH + 15) return null;
+    const mKey = m.milestoneID || String(m.fundraisingGoal);
+    const hitInfo = milestoneHits.get(mKey);
+    const isHit = Boolean(hitInfo) || currentTotalCalculated >= mVal;
+    const lineColor = isHit ? config.successColor || '#00ff00' : config.accentColor1 || '#ff00ff';
+    return /*#__PURE__*/React.createElement("g", {
+      key: mKey
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: padL,
+      y1: mY,
+      x2: padL + plotW,
+      y2: mY,
+      stroke: lineColor,
+      strokeWidth: isHit ? 2 : 1.5,
+      strokeDasharray: isHit ? '5,4' : '4,6',
+      opacity: isHit ? 0.9 : 0.65
+    }), /*#__PURE__*/React.createElement("g", {
+      transform: `translate(${padL + plotW + 6}, ${mY - 11})`,
+      style: {
+        cursor: 'pointer'
+      },
+      onMouseEnter: e => {
+        const rect = e.target.getBoundingClientRect();
+        setHoveredPoint({
+          x: padL + plotW,
+          y: mY,
+          date: hitInfo ? hitInfo.hitDate : new Date(),
+          cumulativeTotal: mVal,
+          milestone: m,
+          isMilestoneHit: isHit
+        });
+      }
+    }, /*#__PURE__*/React.createElement("rect", {
+      width: "136",
+      height: "22",
+      rx: "4",
+      fill: hexToRgba(lineColor, 0.2),
+      stroke: lineColor,
+      strokeWidth: "1"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: "8",
+      y: "15",
+      fill: lineColor,
+      fontSize: "9.5",
+      fontWeight: "bold",
+      fontFamily: "monospace"
+    }, isHit ? '✓' : '🎯', " ", currencyPrefix, mVal.toFixed(0), " - ", m.description.slice(0, 11))));
+  }), viewMode === 'cumulative' && /*#__PURE__*/React.createElement(React.Fragment, null, areaPath && /*#__PURE__*/React.createElement("path", {
+    d: areaPath,
+    fill: `url(#${gradId})`
+  }), linePath && /*#__PURE__*/React.createElement("path", {
+    d: linePath,
+    fill: "none",
+    stroke: config.successColor || '#00ff00',
+    strokeWidth: "3.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    filter: "url(#glowFilter)"
+  }), showMilestones && Array.from(milestoneHits.values()).map((hit, idx) => {
+    const hitX = getX(hit.hitDate.getTime());
+    const hitY = getY(hit.cumulativeTotal);
+    return /*#__PURE__*/React.createElement("g", {
+      key: `hit-${idx}`
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: hitX,
+      y1: hitY,
+      x2: hitX,
+      y2: padT + plotH,
+      stroke: config.successColor || '#00ff00',
+      strokeWidth: "1.5",
+      strokeDasharray: "3,3",
+      opacity: "0.7"
+    }), /*#__PURE__*/React.createElement("g", {
+      transform: `translate(${hitX}, ${hitY})`,
+      style: {
+        cursor: 'pointer'
+      },
+      onMouseEnter: () => {
+        setHoveredPoint({
+          x: hitX,
+          y: hitY,
+          date: hit.hitDate,
+          cumulativeTotal: hit.cumulativeTotal,
+          amount: convertAmount(hit.donation.amount || 0),
+          donor: hit.donation.displayName || t('anonymous'),
+          message: hit.donation.message,
+          milestone: hit.milestone,
+          isMilestoneHit: true
+        });
+      }
+    }, /*#__PURE__*/React.createElement("circle", {
+      r: "9",
+      fill: config.successColor || '#00ff00',
+      opacity: "0.3"
+    }), /*#__PURE__*/React.createElement("circle", {
+      r: "5",
+      fill: "#ffffff",
+      stroke: config.successColor || '#00ff00',
+      strokeWidth: "2"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: "0",
+      y: "-12",
+      textAnchor: "middle",
+      fill: "#ffea00",
+      fontSize: "12",
+      fontWeight: "bold"
+    }, "🏆")));
+  }), timelinePoints.map((pt, idx) => {
+    const ptX = getX(pt.timestamp);
+    const ptY = getY(pt.cumulativeTotal);
+    return /*#__PURE__*/React.createElement("circle", {
+      key: `pt-${idx}`,
+      cx: ptX,
+      cy: ptY,
+      r: "4",
+      fill: pt.unlockedMilestones.length > 0 ? '#ffea00' : effHighlightColor || '#00ffff',
+      stroke: config.backgroundColor,
+      strokeWidth: "1.5",
+      style: {
+        cursor: 'pointer'
+      },
+      onMouseEnter: () => {
+        setHoveredPoint({
+          x: ptX,
+          y: ptY,
+          date: pt.date,
+          cumulativeTotal: pt.cumulativeTotal,
+          amount: pt.amount,
+          donor: pt.donation?.displayName || t('anonymous'),
+          message: pt.donation?.message,
+          milestone: pt.unlockedMilestones[0],
+          isMilestoneHit: pt.unlockedMilestones.length > 0
+        });
+      }
+    });
+  })), viewMode === 'monthly' && /*#__PURE__*/React.createElement(React.Fragment, null, monthlyData.map((m, idx) => {
+    const barSlotW = plotW / 12;
+    const barW = Math.max(14, barSlotW * 0.72);
+    const barX = padL + idx * barSlotW + (barSlotW - barW) / 2;
+    const barH = m.amount / maxY * plotH;
+    const barY = padT + plotH - barH;
+    return /*#__PURE__*/React.createElement("g", {
+      key: `bar-${idx}`
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: barX,
+      y: barY,
+      width: barW,
+      height: Math.max(2, barH),
+      rx: "3",
+      fill: m.amount > 0 ? config.successColor || '#00ff00' : hexToRgba(config.textColor, 0.1),
+      opacity: m.amount > 0 ? 0.85 : 0.4,
+      style: {
+        cursor: 'pointer'
+      },
+      onMouseEnter: () => {
+        setHoveredPoint({
+          x: barX + barW / 2,
+          y: barY,
+          date: new Date(campaignYear, idx, 15),
+          cumulativeTotal: m.amount,
+          monthName: m.fullName,
+          monthCount: m.count
+        });
+      }
+    }), m.amount > 0 && /*#__PURE__*/React.createElement("text", {
+      x: barX + barW / 2,
+      y: barY - 6,
+      textAnchor: "middle",
+      fill: config.textColor,
+      fontSize: "9",
+      fontWeight: "bold",
+      fontFamily: "monospace"
+    }, currencyPrefix, Math.round(m.amount)));
+  })), sortedYearDonations.length === 0 && /*#__PURE__*/React.createElement("text", {
+    x: padL + plotW / 2,
+    y: padT + plotH / 2,
+    textAnchor: "middle",
+    fill: effSecondaryTextColor,
+    fontSize: "12",
+    fontFamily: config.fontFamily
+  }, t('noDonationsThisYear', {
+    year: String(campaignYear)
+  }))), hoveredPoint && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      left: `${Math.min(hoveredPoint.x, svgW - 220)}px`,
+      top: `${Math.max(10, hoveredPoint.y - 85)}px`,
+      backgroundColor: hexToRgba(config.panelColor || '#1a1a1a', 0.95),
+      border: `1px solid ${hoveredPoint.isMilestoneHit ? config.successColor : effHighlightColor}`,
+      boxShadow: `0 4px 15px rgba(0,0,0,0.7), 0 0 10px ${hexToRgba(hoveredPoint.isMilestoneHit ? config.successColor : effHighlightColor, 0.4)}`,
+      borderRadius: '6px',
+      padding: '10px 12px',
+      pointerEvents: 'none',
+      zIndex: 10,
+      maxWidth: '260px',
+      fontSize: '0.78rem',
+      lineHeight: 1.4,
+      color: config.textColor,
+      fontFamily: config.fontFamily
+    }
+  }, hoveredPoint.monthName ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 'bold',
+      color: effHighlightColor,
+      marginBottom: '2px'
+    }
+  }, "📅 ", hoveredPoint.monthName), /*#__PURE__*/React.createElement("div", null, t('totalAtTime'), ": ", /*#__PURE__*/React.createElement("strong", null, currencyPrefix, hoveredPoint.cumulativeTotal.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: effSecondaryTextColor
+    }
+  }, hoveredPoint.monthCount, " ", t('donations'))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.72rem',
+      color: effSecondaryTextColor,
+      marginBottom: '4px'
+    }
+  }, "📅 ", hoveredPoint.date?.toLocaleDateString()), hoveredPoint.donor && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 'bold',
+      color: config.textColor
+    }
+  }, "👤 ", hoveredPoint.donor, ": ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: config.successColor
+    }
+  }, currencyPrefix, hoveredPoint.amount?.toFixed(2))), /*#__PURE__*/React.createElement("div", null, t('totalAtTime'), ": ", /*#__PURE__*/React.createElement("strong", null, currencyPrefix, hoveredPoint.cumulativeTotal.toFixed(2))), hoveredPoint.milestone && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '6px',
+      paddingTop: '6px',
+      borderTop: `1px dashed ${effDividerColor}`,
+      color: '#ffea00',
+      fontWeight: 'bold'
+    }
+  }, "🏆 ", t('milestoneUnlocked'), ": ", hoveredPoint.milestone.description, " (", currencyPrefix, convertAmount(hoveredPoint.milestone.fundraisingGoal).toFixed(0), ")"), hoveredPoint.message && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '4px',
+      fontStyle: 'italic',
+      color: effSecondaryTextColor,
+      fontSize: '0.72rem'
+    }
+  }, "\"", hoveredPoint.message.slice(0, 60), hoveredPoint.message.length > 60 ? '...' : '', "\""))))));
+};
 const TeamDashboardView = ({
   styles,
   config,
@@ -667,6 +1519,7 @@ const TeamDashboardView = ({
   participantGoal,
   selectedAccountId,
   setSelectedAccountId,
+  milestones = [],
   t,
   isOverlay = false,
   effHeaderColor,
@@ -692,6 +1545,7 @@ const TeamDashboardView = ({
   const [accountSearch, setAccountSearch] = useState('');
   const [fetchedAccounts, setFetchedAccounts] = useState({});
   const [loadingAccount, setLoadingAccount] = useState(false);
+  const [teamGraphScope, setTeamGraphScope] = useState('team');
 
   // Active account ID defaults to the current participantId or first team participant if participant is not in team
   const activeAccountId = selectedAccountId || (participantId && teamParticipants.some(p => String(p.participantID) === String(participantId)) ? String(participantId) : teamParticipants.length > 0 ? String(teamParticipants[0]?.participantID) : String(participantId || ''));
@@ -982,6 +1836,90 @@ const TeamDashboardView = ({
       color: effSecondaryTextColor
     }
   }, "(", accountContribution.toFixed(1), "%)")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '1.5rem',
+      width: '100%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      gap: '8px',
+      marginBottom: '10px',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.8rem',
+      color: effSecondaryTextColor,
+      fontWeight: 'bold'
+    }
+  }, t('annualProgress'), ":"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setTeamGraphScope('team'),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '6px 14px',
+      fontSize: '0.78rem',
+      backgroundColor: teamGraphScope === 'team' ? effPrimaryButtonBgColor : config.panelColor,
+      color: teamGraphScope === 'team' ? config.buttonTextColor : config.textColor,
+      border: `1px solid ${teamGraphScope === 'team' ? effHighlightColor : effDividerColor}`,
+      borderRadius: '4px'
+    }
+  }, "👥 ", t('viewEntireTeam'), " (", teamName || 'Team', ")"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setTeamGraphScope('account'),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '6px 14px',
+      fontSize: '0.78rem',
+      backgroundColor: teamGraphScope === 'account' ? effPrimaryButtonBgColor : config.panelColor,
+      color: teamGraphScope === 'account' ? config.buttonTextColor : config.textColor,
+      border: `1px solid ${teamGraphScope === 'account' ? effHighlightColor : effDividerColor}`,
+      borderRadius: '4px'
+    }
+  }, "👤 ", t('viewActiveMember'), " (", activeAccountName, ")")), teamGraphScope === 'team' ? /*#__PURE__*/React.createElement(AnnualProgressGraph, {
+    styles: styles,
+    config: config,
+    donations: teamDonations,
+    milestones: [],
+    goal: teamGoal,
+    totalRaised: teamTotalRaised,
+    currencyPrefix: currencyPrefix,
+    convertAmount: convertAmount,
+    t: t,
+    entityName: teamName || t('entireTeam'),
+    isTeam: true,
+    effHighlightColor: effHighlightColor,
+    effHeaderColor: effHeaderColor,
+    effSecondaryTextColor: effSecondaryTextColor,
+    effDividerColor: effDividerColor,
+    effPrimaryButtonBgColor: effPrimaryButtonBgColor,
+    effSecondaryButtonBgColor: effSecondaryButtonBgColor,
+    hexToRgba: hexToRgba
+  }) : /*#__PURE__*/React.createElement(AnnualProgressGraph, {
+    styles: styles,
+    config: config,
+    donations: rawAccountDonations,
+    milestones: activeAccountId === String(participantId) ? milestones : [],
+    goal: activeAccountGoal,
+    totalRaised: activeAccountTotal,
+    currencyPrefix: currencyPrefix,
+    convertAmount: convertAmount,
+    t: t,
+    entityName: activeAccountName,
+    isTeam: false,
+    effHighlightColor: effHighlightColor,
+    effHeaderColor: effHeaderColor,
+    effSecondaryTextColor: effSecondaryTextColor,
+    effDividerColor: effDividerColor,
+    effPrimaryButtonBgColor: effPrimaryButtonBgColor,
+    effSecondaryButtonBgColor: effSecondaryButtonBgColor,
+    hexToRgba: hexToRgba
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
@@ -1919,6 +2857,70 @@ const QRCodeOverlay = ({
     }
   }, subtitle)));
 };
+const GraphOverlay = ({
+  styles,
+  config,
+  donations = [],
+  milestones = [],
+  goal = 0,
+  totalRaised = 0,
+  currencyPrefix = '$',
+  convertAmount = a => a,
+  t,
+  entityName = '',
+  isTeam = false,
+  effHighlightColor = '#00ffff',
+  effHeaderColor = '#00ffff',
+  effSecondaryTextColor = '#a0a0a0',
+  effDividerColor = '#333333',
+  effPrimaryButtonBgColor = '#ff00ff',
+  effSecondaryButtonBgColor = '#333333',
+  hexToRgba = (h, a) => h,
+  isTransparent = false
+}) => {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100vw',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      padding: '16px',
+      boxSizing: 'border-box',
+      overflow: 'hidden'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      maxWidth: '960px',
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement(AnnualProgressGraph, {
+    styles: styles,
+    config: config,
+    donations: donations,
+    milestones: milestones,
+    goal: goal,
+    totalRaised: totalRaised,
+    currencyPrefix: currencyPrefix,
+    convertAmount: convertAmount,
+    t: t,
+    entityName: entityName,
+    isTeam: isTeam,
+    effHighlightColor: effHighlightColor,
+    effHeaderColor: effHeaderColor,
+    effSecondaryTextColor: effSecondaryTextColor,
+    effDividerColor: effDividerColor,
+    effPrimaryButtonBgColor: effPrimaryButtonBgColor,
+    effSecondaryButtonBgColor: effSecondaryButtonBgColor,
+    hexToRgba: hexToRgba,
+    isInitiallyCollapsed: false,
+    isOverlay: true,
+    isTransparent: isTransparent
+  })));
+};
 const CollapsibleSection = ({
   title,
   children,
@@ -1962,4 +2964,4 @@ const CollapsibleSection = ({
     }
   }, children)));
 };
-export { NextMilestoneOverlay, TeamHeaderOverlay, TeamOverlay, TeamDonationsOverlay, TeamDashboardView, ScheduleOverlay, SponsorOverlay, TextOverlay, Confetti, CelebrationOverlay, QRCodeSvg, QRCodeOverlay, CollapsibleSection };
+export { NextMilestoneOverlay, TeamHeaderOverlay, TeamOverlay, TeamDonationsOverlay, TeamDashboardView, ScheduleOverlay, SponsorOverlay, TextOverlay, Confetti, CelebrationOverlay, QRCodeSvg, QRCodeOverlay, CollapsibleSection, AnnualProgressGraph, GraphOverlay };

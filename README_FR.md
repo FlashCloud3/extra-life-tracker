@@ -16,7 +16,8 @@
 - **Suivi des Dons en Temps Réel** : Données synchronisées directement avec l'API DonorDrive d'Extra Life (Participant et Équipe) avec sondage automatique et actualisation configurable.
 - **Tableau de Bord Participant & Équipe** :
   - **Participant** : Montant total récolté, objectif, barre de progression animée, chronomètre de marathon, liste des derniers dons et étapes (milestones).
-  - **Équipe** : Statistiques globales de l'équipe, classement des meilleurs membres et liste des dons d'équipe classés **du plus récent au plus ancien**.
+  - **Équipe** : Statistiques globales de l'équipe, classement des membres et liste des dons d'équipe classés **du plus récent au plus ancien**.
+  - **📈 Graphique de Progrès Annuel & Paliers (Repliable, Réduit par Défaut)** : Visualisation interactive des dons collectés tout au long de la campagne avec lignes de seuil horizontales pour chaque palier et l'objectif, marqueurs de trophée (🏆) indiquant la date et le don exact ayant franchi chaque étape, et bascule entre vue **Croissance Cumulative** et **Répartition Mensuelle**. Disponible sur le tableau de bord Participant ainsi que sur le tableau de bord Équipe (avec sélecteur Équipe Complète / Membre Sélectionné).
 - **Suite Complète d'Overlays OBS Prêts pour le Streaming** :
   - Barre de progression (`?overlay=progress`)
   - En-tête de stream complet (`?overlay=header`)

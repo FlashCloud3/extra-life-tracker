@@ -13,12 +13,14 @@ The top navigation bar provides three primary views:
 
 1. **👤 Participant Dashboard:**
    - Real-time fundraising stats: Total Raised, Goal, Progress Bar, Marathon Elapsed/Countdown Timer.
+   - **📈 Annual Fundraising Progress & Milestones Graph (Collapsible, Collapsed by Default):** Interactive chart displaying cumulative fundraising curves throughout the campaign year, horizontal milestone and goal threshold lines (color-coded for achieved vs upcoming targets), milestone hit celebratory pins (🏆) marking the exact donation date and donor that unlocked each incentive, plus toggleable **Cumulative Growth** vs **Monthly Breakdown** views.
    - Recent donations list and milestone achievements.
    - Live stream controls: **Test Donation (+$15)**, **Resync Data**, and **Clear & Stop All**.
    - Overlay links cards for all participant overlays with one-click **Copy Link** and **Open Popup** preview buttons.
 
 2. **👥 Team Dashboard:**
    - Full team fundraising progress bar, total raised, goal, and donor count.
+   - **📈 Team & Member Annual Progress Graph (Collapsible, Collapsed by Default):** Interactive annual progress graph with seamless toggling between **Entire Team Progress** (macro team cumulative line & team goal milestones) and **Selected Member Progress** (individual member curve with personal milestones).
    - Interactive roster list of all team members with their individual totals and fundraising goals.
    - **Recent Team Donations Feed:** Automatically ordered with the **most recent donations first** across all team members, with search and donor filtering.
    - Team member inspection: Click any team participant to view their personal donations and progress.
@@ -128,6 +130,8 @@ Located under **Core Setup**:
 | **Progress Bar** | `?overlay=progress` | 800 × 120 | Horizontal bar with current total, goal, and marathon timer. |
 | **Notifications** | `?overlay=notifications` | 500 × 200 | Pop-up toast alert queue for new donations with animations and sound. |
 | **Next Milestone** | `?overlay=milestone` | 600 × 100 | Progress bar and remaining amount toward the upcoming milestone. |
+| **Annual Progress Graph** | `?overlay=graph` | 880 × 420 | Full annual campaign cumulative fundraising graph and milestone thresholds. |
+| **Team Progress Graph** | `?overlay=team-graph` | 880 × 420 | Annual progress graph for the whole team or selected member. |
 | **Team Header** | `?overlay=team-header` | 850 × 220 | Horizontal team banner with total raised, goal, and donor count. |
 | **Team Donations** | `?overlay=team-donations` | 500 × 750 | Dedicated list showing the **most recent team donations first**. |
 | **Team Dashboard** | `?overlay=team-dashboard` | 1280 × 850 | Full-screen command center with team stats, full roster, and donations feed. |
