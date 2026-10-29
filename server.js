@@ -244,8 +244,38 @@ app.post('/api/theme', async (req, res) => {
 app.post('/api/stop-events', (req, res) => {
     const profileId = getProfileId(req);
     io.to(`profile:${profileId}`).emit('event:clear');
+    if (profileId !== 'default') {
+        io.to('profile:default').emit('event:clear');
+    }
     console.log(`API [${profileId}]: All events stopped`);
     res.json({ success: true, message: 'All events cleared and stopped.', profile: profileId });
+});
+
+// POST /api/test-donation
+// Body: { "amount": 15, "profile": "user1" }
+app.post('/api/test-donation', async (req, res) => {
+    const profileId = getProfileId(req);
+    const profile = await getOrCreateProfile(profileId);
+    const testAmount = Number(req.body?.amount) || 15.00;
+    
+    profile.data.totalRaised += testAmount;
+    const fakeDonation = {
+        donationID: `test-${Date.now()}`,
+        displayName: "Test Donor",
+        amount: testAmount,
+        message: "Test donation via API!",
+        createdDateUTC: new Date().toISOString()
+    };
+    
+    const payload = { donation: fakeDonation, isMilestone: false };
+    io.to(`profile:${profile.id}`).emit('event:donation', payload);
+    if (profile.id !== 'default') {
+        io.to('profile:default').emit('event:donation', payload);
+    } else {
+        io.emit('event:donation', payload);
+    }
+    io.to(`profile:${profile.id}`).emit('data-updated', profile.data);
+    res.json({ success: true, message: 'Test donation triggered.', profile: profileId, amount: testAmount });
 });
 
 // --- STATIC SERVING (Must be AFTER API routes) ---
@@ -778,19 +808,33 @@ io.on('connection', (socket) => {
 
         if (passedMilestones.length > 0) {
             isMilestone = true;
-            io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: passedMilestones[0] });
+            const celebPayload = { type: 'milestone', milestone: passedMilestones[0] };
+            io.to(`profile:${profile.id}`).emit('event:celebration', celebPayload);
+            if (profile.id !== 'default') {
+                io.to('profile:default').emit('event:celebration', celebPayload);
+            }
             if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
                 profile.twitchClient.say(profile.config.twitchChannel, `🎉 MILESTONE UNLOCKED: ${passedMilestones[0].description}!`);
             }
         } else if (passedGoal) {
             isMilestone = true;
-            io.to(`profile:${profile.id}`).emit('event:celebration', { type: 'milestone', milestone: { description: 'Fundraising Goal Reached!' } });
+            const celebPayload = { type: 'milestone', milestone: { description: 'Fundraising Goal Reached!' } };
+            io.to(`profile:${profile.id}`).emit('event:celebration', celebPayload);
+            if (profile.id !== 'default') {
+                io.to('profile:default').emit('event:celebration', celebPayload);
+            }
             if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
                 profile.twitchClient.say(profile.config.twitchChannel, `🎉 GOAL REACHED! We did it!`);
             }
         }
 
-        io.to(`profile:${profile.id}`).emit('event:donation', { donation: fakeDonation, isMilestone: isMilestone });
+        const donationPayload = { donation: fakeDonation, isMilestone: isMilestone };
+        io.to(`profile:${profile.id}`).emit('event:donation', donationPayload);
+        if (profile.id !== 'default') {
+            io.to('profile:default').emit('event:donation', donationPayload);
+        } else {
+            socket.broadcast.emit('event:donation', donationPayload);
+        }
         
         if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
             const currencyPrefix = profile.config.currency === 'CAD' ? 'C$' : '$';
@@ -799,10 +843,18 @@ io.on('connection', (socket) => {
         }
 
         io.to(`profile:${profile.id}`).emit('data-updated', profile.data);
+        if (profile.id !== 'default') {
+            io.to('profile:default').emit('data-updated', profile.data);
+        }
     });
 
     socket.on('trigger-clear', (profileId = 'default') => {
         io.to(`profile:${profileId}`).emit('event:clear');
+        if (profileId !== 'default') {
+            io.to('profile:default').emit('event:clear');
+        } else {
+            socket.broadcast.emit('event:clear');
+        }
     });
 });
 

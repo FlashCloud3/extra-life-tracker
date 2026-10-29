@@ -72,31 +72,49 @@ L'application est accessible sur `http://localhost:3000`.
 
 Tous les overlays s'intègrent dans OBS en ajoutant une source de type **Navigateur** (*Browser Source*).
 
+### 🎛️ Panneau Personnalisé OBS / Custom Browser Dock (Recommandé pour GitHub Pages)
+
+Lorsque vous utilisez le tracker hébergé sur **GitHub Pages** (ou en serveur statique local sans `server.js`), votre navigateur externe (Google Chrome) et les sources navigateurs d'OBS s'exécutent dans des profils isolés. Par conséquent, les événements `BroadcastChannel` ne peuvent pas communiquer entre Chrome et OBS.
+
+Pour obtenir une **synchronisation instantanée à 100 %** (bouton **« Simuler un don (+15 $) »**, arrêt d'urgence des alertes, et mise à jour en direct des paramètres) :
+
+1. Dans le menu supérieur d'OBS Studio, cliquez sur **Docks** (ou **Panneaux**) > **Docks de navigateur personnalisés...** (*Custom Browser Docks...*).
+2. Dans la fenêtre de configuration :
+   * **Nom du dock :** `Extra Life Control` (ou le nom de votre choix)
+   * **URL :** L'adresse de votre GitHub Pages (ex: `https://<votre-nom-utilisateur>.github.io/<nom-du-repo>/?profile=VOTRE_ID_PARTICIPANT` ou `http://localhost:8080/?profile=VOTRE_ID` en test local)
+3. Cliquez sur **Appliquer**, puis **Fermer**.
+4. Une nouvelle fenêtre s'ouvre dans OBS affichant l'intégralité de votre tableau de bord Extra Life.
+5. Vous pouvez ancrer ce panneau n'importe où dans OBS (à côté du chat, des scènes ou du mélangeur audio) ou le glisser sur un second écran.
+6. **Synchronisation immédiate :** Comme le dock et les sources navigateurs d'OBS partagent le **même processus CEF**, l'API `BroadcastChannel` fonctionne directement. Cliquer sur **« Simuler un don »** dans le panneau déclenchera immédiatement l'alerte sur votre overlay dans OBS !
+
+> **Précision pour les vrais dons :** Les vrais dons envoyés par vos spectateurs n'ont **pas** besoin du dock ou du navigateur externe pour s'afficher : chaque overlay dans OBS interroge directement l'API DonorDrive. Le dock personnalisé sert pour les commandes manuelles, les tests et le réglage en direct des paramètres.
+
+---
+
 ### Comment ajouter un overlay dans OBS :
 1. Dans OBS, sous la section **Sources**, cliquez sur `+` puis choisissez **Navigateur**.
 2. Donnez-lui un nom (ex: `Extra Life - Alerte`).
-3. Cochez **URL locale** si vous utilisez les fichiers locaux, ou collez l'URL web avec le paramètre de l'overlay (ex: `http://localhost:3000/?overlay=alert`).
+3. Cochez **URL locale** si vous utilisez les fichiers locaux, ou collez l'URL web avec le paramètre de l'overlay (ex: `http://localhost:3000/?overlay=notifications`).
 4. Indiquez la **Largeur** et la **Hauteur** recommandées (voir tableau ci-dessous).
-5. Cochez **Arrêter la lecture lorsque la source n'est pas visible** et **Actualiser le navigateur lorsque la scène devient active**.
+5. Décochez **Arrêter la lecture lorsque la source n'est pas visible** (pour que l'overlay reste à l'écoute de `BroadcastChannel`).
 
 ### Tableau des Overlays Disponibles
 
 | Overlay | Paramètre URL | Dimensions Recommandées | Description |
 | :--- | :--- | :--- | :--- |
-| **Alertes de Don** | `?overlay=alert` | 600 × 250 px | Boîte d'alerte rétro avec animation et son lors d'un don. |
-| **Barre de Progression** | `?overlay=progress` | 800 × 90 px | Jauge animée avec montant collecté, objectif et pourcentage. |
-| **En-tête Complet** | `?overlay=header` | 1920 × 120 px | Bannière complète avec logo, statistiques, jauge et dernier don. |
-| **Dons Récents** | `?overlay=donations` | 400 × 500 px | Liste défilante des derniers dons avec montants et messages. |
-| **Récompenses & Incitations** | `?overlay=incentives` | 400 × 500 px | Liste des récompenses disponibles pour les donateurs. |
-| **Jalons / Milestones** | `?overlay=milestones` | 400 × 500 px | Liste des objectifs par palier débloqués ou à atteindre. |
-| **En-tête Équipe** | `?overlay=team-header` | 1920 × 120 px | Statistiques collectives complètes de l'équipe. |
-| **Dons d'Équipe** | `?overlay=team-donations` | 450 × 600 px | Liste des dons d'équipe triée **du plus récent au plus ancien**. |
-| **Tableau Équipe Dédié** | `?overlay=team-dashboard` | 1280 × 720 px | Vue globale équipe : totaux, progression et derniers dons. |
+| **Alertes de Don** | `?overlay=notifications` | 500 × 200 px | Boîte d'alerte rétro avec animation et son lors d'un don. |
+| **Barre de Progression** | `?overlay=progress` | 800 × 120 px | Jauge animée avec montant collecté, objectif et chronomètre du marathon. |
+| **Jalons / Milestones** | `?overlay=milestone` | 600 × 100 px | Progression vers le prochain objectif ou incitatif. |
+| **Graphique Annuel** | `?overlay=graph` | 880 × 420 px | Graphique interactif de collecte annuelle avec paliers et repères. |
+| **Graphique Équipe** | `?overlay=team-graph` | 880 × 420 px | Graphique annuel pour l'équipe entière ou un membre sélectionné. |
+| **En-tête Équipe** | `?overlay=team-header` | 850 × 220 px | Bannière horizontale avec progression, objectif et nombre de donateurs. |
+| **Dons d'Équipe** | `?overlay=team-donations` | 500 × 750 px | Liste des dons d'équipe triée **du plus récent au plus ancien**. |
+| **Tableau Équipe Dédié** | `?overlay=team-dashboard` | 1280 × 850 px | Vue globale équipe : totaux, progression, liste des membres et derniers dons. |
+| **Célébration Confettis** | `?overlay=celebration` | 1920 × 1080 px | Pluie de confettis plein écran lors des paliers et objectifs. |
 | **Programme du Marathon** | `?overlay=schedule` | 450 × 600 px | Planning des jeux avec mise à jour et biffage en direct. |
 | **Carrousel Sponsors** | `?overlay=sponsors` | 400 × 150 px | Défilement rotatif des logos sponsors et partenaires. |
 | **Texte / Annonces** | `?overlay=text` | 600 × 150 px | Affichage de messages personnalisés, règles ou annonces. |
 | **Code QR Don** | `?overlay=qrcode` | 260 × 320 px | Badge avec QR code scannable renvoyant vers votre page de don. |
-| **Célébration Confettis** | `?overlay=celebration` | 1920 × 1080 px | Pluie de confettis plein écran lors des paliers et dons majeurs. |
 
 ---
 

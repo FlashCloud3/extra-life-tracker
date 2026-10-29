@@ -140,6 +140,13 @@ Situé dans la section **Configuration Principale** :
 | **Affichage de Texte** | `?overlay=text` | 600 × 150 | Message personnalisé, lecteur de fichier `.txt` local ou flux texte distant. |
 | **Code QR** | `?overlay=qrcode` | 260 × 320 | Badge rétro avec code QR scannable menant directement à la page de don. |
 
+### 🎛️ Panneau Personnalisé OBS (Custom Browser Dock - Recommandé pour GitHub Pages)
+Lorsque vous hébergez le tableau de bord sur GitHub Pages (mode statique sans serveur local `server.js`), les navigateurs externes (comme Chrome) et les sources navigateurs d'OBS tournent dans des environnements isolés et ne peuvent pas communiquer via `BroadcastChannel`.
+* **Configuration :** Dans OBS Studio, cliquez sur **Docks** > **Docks de navigateur personnalisés...**, nommez le dock `Extra Life Control` et indiquez l'URL :
+  `https://<votre-nom-utilisateur>.github.io/<nom-du-repo>/?profile=VOTRE_ID_PARTICIPANT`
+* **Résultat :** Le tableau de bord s'exécute directement dans OBS au sein du même processus CEF que les incrustations. Le bouton **« Simuler un don (+15 $) »**, l'arrêt d'urgence et la mise à jour des paramètres déclenchent immédiatement les incrustations OBS en direct !
+* *Remarque :* Les vrais dons des donateurs interrogent DonorDrive de façon autonome dans chaque overlay et ne nécessitent ni Chrome ni le panneau ouvert.
+
 ---
 
 ## 🔌 API d'Automatisation Locale (Stream Deck / Points d'accès HTTP)

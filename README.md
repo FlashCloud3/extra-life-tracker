@@ -49,6 +49,8 @@ You can run the tracker either **online via GitHub Pages** (zero installation) o
    https://<your-username>.github.io/<repo-name>/
    ```
 > **Important Note for GitHub Pages:** Keep the main dashboard open in a browser tab on your computer while streaming. In static mode, the dashboard polls the DonorDrive API and synchronizes with your OBS overlays via the browser's native `BroadcastChannel` API.
+>
+> **💡 Pro-Tip for OBS Real-Time Sync:** Chrome and OBS run in isolated processes on GitHub Pages. To enable instant **"Test Donation"** triggers and live stream controls, add the dashboard as an [OBS Custom Browser Dock](#-obs-custom-browser-dock-setup-recommended-for-github-pages).
 
 ---
 
@@ -154,6 +156,25 @@ The tracker includes an integrated Twitch bot powered by `tmi.js` that works in 
 
 All overlays run as standard **Browser Sources** in OBS Studio, Streamlabs Desktop, or XSplit.
 
+### 🎛️ OBS Custom Browser Dock Setup (Recommended for GitHub Pages)
+
+When hosting the tracker on **GitHub Pages** (or any static server without `server.js`), Google Chrome and OBS Browser Sources run in separate browser processes, preventing cross-window communication (`BroadcastChannel`) between your desktop browser and OBS.
+
+To get **100% real-time synchronization** — including instant **"Test Donation"** alerts, manual resyncing, and live settings updates directly into your stream overlays:
+
+1. In OBS Studio, go to the top menu: **Docks** > **Custom Browser Docks...**
+2. In the configuration window:
+   * **Dock Name:** `Extra Life Control` (or any name you prefer)
+   * **URL:** Your GitHub Pages URL (e.g. `https://<your-username>.github.io/<repo-name>/?profile=YOUR_PARTICIPANT_ID` or `http://localhost:8080/?profile=YOUR_PARTICIPANT_ID` if running static mode locally)
+3. Click **Apply**, then **Close**.
+4. A new window will appear containing your complete Extra Life dashboard.
+5. You can dock this window anywhere inside OBS (e.g. alongside your Chat, Scenes, or Audio Mixer) or drag it onto a second monitor.
+6. **Instant Testing & Control:** Click **"Test Donation (+15$)"** or change themes/settings in the dock — the alerts and updates will trigger in your OBS scene overlays immediately!
+
+> **Note on Real Donations:** Real donations from your donors do **not** require any browser or dock to be open — each OBS overlay autonomously polls the DonorDrive API directly. The OBS Custom Browser Dock is specifically used for manual control, test alerts, and instant settings sync on static setups.
+
+---
+
 ### Recommended OBS Browser Source Settings:
 * **Custom CSS:** Leave blank (all overlays have native transparent backgrounds).
 * **Control audio via OBS:** Check this if you want OBS to capture alert sounds directly.
@@ -166,6 +187,8 @@ All overlays run as standard **Browser Sources** in OBS Studio, Streamlabs Deskt
 | **Progress Bar** | `?overlay=progress` | 800 × 120 px | Fundraising bar with total raised, goal, and marathon countdown/elapsed timer. |
 | **Donation Notifications** | `?overlay=notifications` | 500 × 200 px | Pop-up toast alert for incoming donations with sound & animations. |
 | **Next Milestone** | `?overlay=milestone` | 600 × 100 px | Shows progress towards your next incentive or milestone. |
+| **Annual Progress Graph** | `?overlay=graph` | 880 × 420 px | Full annual campaign cumulative fundraising graph and milestone thresholds. |
+| **Team Progress Graph** | `?overlay=team-graph` | 880 × 420 px | Annual progress graph for the whole team or selected team member. |
 | **Team Header** | `?overlay=team-header` | 850 × 220 px | Compact horizontal banner with team progress, total, goal, and donor count. |
 | **Team Donations** | `?overlay=team-donations` | 500 × 750 px | Vertical feed showing the **most recent team donations first**. |
 | **Team Dashboard** | `?overlay=team-dashboard` | 1280 × 850 px | Full-screen command center with team progress, full roster, and donations feed. |

@@ -370,7 +370,8 @@ export const translations = {
     hideGraph: "Hide Graph",
     graphOverlay: "Annual Progress Graph Overlay",
     teamGraphOverlay: "Team Progress Graph Overlay",
-    graphTransparentBg: "Transparent Overlay Background"
+    graphTransparentBg: "Transparent Overlay Background",
+    obsDockTip: "💡 Pro-Tip (GitHub Pages): Add this dashboard inside OBS as a Custom Browser Dock (Docks > Custom Browser Docks...) to enable real-time Test Donations and instant overlay controls!"
   },
   fr: {
     appTitle: "Suivi Extra Life",
@@ -732,7 +733,8 @@ export const translations = {
     hideGraph: "Masquer le Graphique",
     graphOverlay: "Incrustation Graphique Annuel",
     teamGraphOverlay: "Incrustation Graphique Équipe",
-    graphTransparentBg: "Fond Transparent de l'Incrustation"
+    graphTransparentBg: "Fond Transparent de l'Incrustation",
+    obsDockTip: "💡 Astuce GitHub Pages : Ajoutez ce tableau de bord comme Dock Personnalisé dans OBS (Docks > Docks de navigateur personnalisés...) pour tester les alertes de don et synchroniser vos réglages en direct !"
   }
 };
 

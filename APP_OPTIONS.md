@@ -141,6 +141,13 @@ Located under **Core Setup**:
 | **Text Display** | `?overlay=text` | 600 × 150 | Custom message, local `.txt` file, or remote text stream banner. |
 | **QR Code** | `?overlay=qrcode` | 260 × 320 | Retro scan-to-donate QR code badge. |
 
+### 🎛️ OBS Custom Browser Dock (Recommended for GitHub Pages)
+When hosting the dashboard on GitHub Pages (static mode without a local `server.js`), external browsers (Chrome) and OBS Browser Sources run in separate process sandboxes and cannot exchange `BroadcastChannel` messages.
+* **Setup:** In OBS Studio, open **Docks** > **Custom Browser Docks...**, name the dock `Extra Life Control`, and set the URL to:
+  `https://<your-username>.github.io/<repo-name>/?profile=YOUR_PARTICIPANT_ID`
+* **Result:** The dashboard runs directly inside OBS in the same CEF process as all browser sources. The **"Test Donation"** button, emergency clear, and live setting changes trigger all OBS overlays in real time!
+* *Note:* Real donations from viewers poll DonorDrive independently in each overlay and do not require Chrome or the dock to be open.
+
 ---
 
 ## 🔌 Local Automation API (Stream Deck / HTTP Endpoints)

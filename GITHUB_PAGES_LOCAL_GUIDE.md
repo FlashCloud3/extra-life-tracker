@@ -145,6 +145,30 @@ When running locally in static mode, add browser sources to OBS using your local
 
 ---
 
+## 🎛️ OBS Custom Browser Dock: Real-Time Sync & Testing in Static Mode
+
+When running on GitHub Pages (or a local static HTTP server without `server.js`):
+* External desktop browsers (such as Google Chrome) and OBS Browser Sources run in **separate process sandboxes and user profiles**.
+* Because of this OS/browser isolation, native `BroadcastChannel` events cannot cross between Chrome and OBS Studio.
+
+### The Solution: Embed the Dashboard Inside OBS
+
+By adding your dashboard as an **OBS Custom Browser Dock**, the dashboard runs within the **exact same Chromium Embedded Framework (CEF) process** as your browser source overlays. Native `BroadcastChannel` communication works instantly!
+
+#### Setup Steps:
+1. Open OBS Studio.
+2. In the top menu, click **Docks** > **Custom Browser Docks...**
+3. In the dialog:
+   * **Dock Name:** `Extra Life Control`
+   * **URL:** Your dashboard URL (e.g. `https://<username>.github.io/<repo>/?profile=YOUR_PARTICIPANT_ID` or `http://localhost:8080/?profile=YOUR_ID` for local static mode)
+4. Click **Apply**, then **Close**.
+5. The Extra Life dashboard will open directly inside OBS. You can snap it into your OBS interface (alongside your Scenes, Audio Mixer, or Twitch Chat) or pop it out to a second monitor.
+6. **Instant Testing:** Click **"Test Donation (+15$)"**, **"Clear Overlays"**, or update themes/settings inside the dock — all OBS overlays will update immediately in real time!
+
+> **Real Donations Note:** Viewers' real donations from your Extra Life page do **not** rely on the dock or browser tab; each OBS overlay independently queries DonorDrive's API directly. The Custom Browser Dock is specifically for manual control, test alerts, and live settings synchronization.
+
+---
+
 ## ⚖️ Feature Comparison: Static (GitHub Pages) vs. Backend Mode
 
 | Feature | Static / GitHub Pages Mode (Local or Hosted) | Full-Stack Node Mode (`npm start`) |
