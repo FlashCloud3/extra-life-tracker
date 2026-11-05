@@ -774,8 +774,9 @@ export const CoreSetupSection = ({
       gap: '10px'
     }
   }, /*#__PURE__*/React.createElement("input", {
+    id: "checkbox-autodetect-team",
     type: "checkbox",
-    checked: config.useParticipantTeamId,
+    checked: config.useParticipantTeamId ?? true,
     onChange: e => {
       const checked = e.target.checked;
       updateConfig({
@@ -789,6 +790,7 @@ export const CoreSetupSection = ({
       }
     }
   }), /*#__PURE__*/React.createElement("label", {
+    htmlFor: "checkbox-autodetect-team",
     style: {
       ...styles.label,
       opacity: 1,
@@ -802,14 +804,14 @@ export const CoreSetupSection = ({
     } : styles.label
   }, t('teamId')), /*#__PURE__*/React.createElement("input", {
     type: "text",
-    value: config.useParticipantTeamId ? config.teamId || teamIdInput : teamIdInput,
+    value: config.useParticipantTeamId ? config.teamId || '' : teamIdInput,
     onChange: e => {
       setTeamIdInput(e.target.value);
       updateConfig({
         teamId: e.target.value
       });
     },
-    placeholder: config.useParticipantTeamId ? config.teamId || t('autoDetect') : t('teamId'),
+    placeholder: config.useParticipantTeamId ? config.teamId || t('noTeamLinked') : t('teamId'),
     style: {
       ...styles.input,
       ...(config.useParticipantTeamId && {

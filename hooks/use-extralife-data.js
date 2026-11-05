@@ -196,10 +196,18 @@ export function useExtraLifeData({
 
       // Auto-detect Team ID
       let targetTeamId = explicitTeamId;
-      if (useAutoTeam && partData?.teamID) {
-        targetTeamId = String(partData.teamID);
-        if (targetTeamId !== currentConf.teamId) {
-          onAutoTeamDetected?.(targetTeamId);
+      if (useAutoTeam) {
+        if (partData && partData.teamID) {
+          targetTeamId = String(partData.teamID);
+          if (targetTeamId !== String(currentConf.teamId || '')) {
+            onAutoTeamDetected?.(targetTeamId);
+          }
+        } else if (partData && !partData.teamID) {
+          // Participant exists but has no team linked (solo)
+          targetTeamId = '';
+          if (currentConf.teamId) {
+            onAutoTeamDetected?.('');
+          }
         }
       }
 
@@ -213,9 +221,9 @@ export function useExtraLifeData({
       if (targetTeamId) {
         try {
           const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
-            fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}`).catch(() => null),
-            fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(() => null),
-            fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants`).catch(() => null)
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}`)).catch(() => null),
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`)).catch(() => null),
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants`)).catch(() => null)
           ]);
           if (teamRes && teamRes.ok) {
             const tData = await teamRes.json();

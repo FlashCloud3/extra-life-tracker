@@ -150,7 +150,7 @@ export const hexToRgba = (hex, alpha) => {
 export const DEFAULT_CONFIG = {
   participantId: '',
   teamId: '',
-  useParticipantTeamId: false,
+  useParticipantTeamId: true,
   theme: 'neon-vibe',
   refreshInterval: 60,
   currency: 'USD',

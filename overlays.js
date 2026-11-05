@@ -1736,7 +1736,33 @@ const TeamDashboardView = ({
   }), " / ", currencyPrefix, convertAmount(teamGoal || 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }), " (", teamProgress.toFixed(1), "%)")))), /*#__PURE__*/React.createElement("div", {
+  }), " (", teamProgress.toFixed(1), "%)")))), !teamName && teamParticipants.length === 0 && (!config?.teamId || String(config.teamId).trim() === '') && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...styles.card,
+      border: `2px dashed ${effDividerColor}`,
+      padding: '14px 18px',
+      backgroundColor: hexToRgba(config?.panelColor || '#1a1a1a', 0.85),
+      marginBottom: '1.5rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '1.6rem',
+      flexShrink: 0
+    }
+  }, "ℹ️"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.82rem',
+      color: effSecondaryTextColor,
+      lineHeight: 1.5
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: config?.textColor || '#ffffff'
+    }
+  }, t('noTeamLinkedTitle'), ":"), " ", t('noTeamLinkedDesc'))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',

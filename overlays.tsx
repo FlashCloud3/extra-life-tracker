@@ -1898,6 +1898,25 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
         )}
       </div>
 
+      {/* NO TEAM LINKED NOTICE (SOLO PARTICIPANT) */}
+      {(!teamName && teamParticipants.length === 0 && (!config?.teamId || String(config.teamId).trim() === '')) && (
+        <div style={{
+          ...styles.card,
+          border: `2px dashed ${effDividerColor}`,
+          padding: '14px 18px',
+          backgroundColor: hexToRgba(config?.panelColor || '#1a1a1a', 0.85),
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '1.6rem', flexShrink: 0 }}>ℹ️</span>
+          <div style={{ fontSize: '0.82rem', color: effSecondaryTextColor, lineHeight: 1.5 }}>
+            <strong style={{ color: config?.textColor || '#ffffff' }}>{t('noTeamLinkedTitle')}:</strong> {t('noTeamLinkedDesc')}
+          </div>
+        </div>
+      )}
+
       {/* 4 SUMMARY METRIC TILES */}
       <div style={{
         display: 'grid',

@@ -203,6 +203,36 @@ const App = () => {
   const [commandTrigger, setCommandTrigger] = useState('');
   const [commandResponse, setCommandResponse] = useState('');
 
+  // Documentation Viewer Modal
+  const [activeDocModal, setActiveDocModal] = useState<string | null>(null);
+  const [activeDocTitle, setActiveDocTitle] = useState<string>('');
+  const [docContent, setDocContent] = useState<string>('');
+  const [loadingDoc, setLoadingDoc] = useState<boolean>(false);
+
+  const openDocViewer = (docFile: string, title: string) => {
+    setActiveDocModal(docFile);
+    setActiveDocTitle(title);
+    setLoadingDoc(true);
+    fetch(docFile)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
+      .then(txt => {
+        setDocContent(txt);
+        setLoadingDoc(false);
+      })
+      .catch(err => {
+        setDocContent(`Could not load ${docFile} (${err?.message || 'Error'}). You can open it directly via the "Open in New Tab" link.`);
+        setLoadingDoc(false);
+      });
+  };
+
+  const closeDocViewer = () => {
+    setActiveDocModal(null);
+    setDocContent('');
+  };
+
   // Translations helper
   const t = useCallback((key: string, args?: Record<string, string | number>) => {
     const lang = (config.language || 'en') as keyof typeof translations;
@@ -550,6 +580,8 @@ const App = () => {
   useEffect(() => {
     if (config.teamId && (config.useParticipantTeamId || !teamIdInput)) {
       setTeamIdInput(config.teamId);
+    } else if (config.useParticipantTeamId && !config.teamId && teamIdInput) {
+      setTeamIdInput('');
     }
   }, [config.teamId, config.useParticipantTeamId, teamIdInput]);
 
@@ -1172,6 +1204,112 @@ const App = () => {
                     </button>
                   </div>
 
+                  {/* DOCUMENTATION PAGES BAR */}
+                  <div style={{
+                    backgroundColor: hexToRgba(config.panelColor, 0.7),
+                    border: `1px solid ${hexToRgba(effHighlightColor, 0.4)}`,
+                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontSize: '0.92rem', color: effHighlightColor, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        📚 {t('documentationLinks')}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: effSecondaryTextColor }}>
+                        {t('docHeaderSubtitle')}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <a
+                        href={config.language === 'fr' ? 'APP_OPTIONS_FR.md' : 'APP_OPTIONS.md'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...styles.button,
+                          margin: 0,
+                          padding: '7px 12px',
+                          fontSize: '0.78rem',
+                          backgroundColor: config.panelColor,
+                          border: `1px solid ${effPrimaryButtonBgColor}`,
+                          color: config.textColor,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ⚙️ {t('docOptionsRef')} <span style={{ opacity: 0.7 }}>↗</span>
+                      </a>
+                      <a
+                        href={config.language === 'fr' ? 'README_FR.md' : 'README.md'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...styles.button,
+                          margin: 0,
+                          padding: '7px 12px',
+                          fontSize: '0.78rem',
+                          backgroundColor: config.panelColor,
+                          border: `1px solid ${effSecondaryButtonBgColor}`,
+                          color: config.textColor,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📖 {t('docMainGuide')} <span style={{ opacity: 0.7 }}>↗</span>
+                      </a>
+                      <a
+                        href="GITHUB_PAGES_LOCAL_GUIDE.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          ...styles.button,
+                          margin: 0,
+                          padding: '7px 12px',
+                          fontSize: '0.78rem',
+                          backgroundColor: config.panelColor,
+                          border: `1px solid ${hexToRgba(config.panelBorderColor, 0.4)}`,
+                          color: config.textColor,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🚀 {t('docGitHubPagesGuide')} <span style={{ opacity: 0.7 }}>↗</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => openDocViewer(config.language === 'fr' ? 'APP_OPTIONS_FR.md' : 'APP_OPTIONS.md', t('docOptionsRef'))}
+                        style={{
+                          ...styles.button,
+                          margin: 0,
+                          padding: '7px 12px',
+                          fontSize: '0.78rem',
+                          backgroundColor: hexToRgba(effHighlightColor, 0.15),
+                          border: `1px solid ${effHighlightColor}`,
+                          color: effHighlightColor,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        👁️ {t('viewDocInApp')}
+                      </button>
+                    </div>
+                  </div>
+
                   <form onSubmit={handleIdSubmit} style={{ ...styles.form, gap: 0, border: 'none', padding: 0 }}>
                     <CoreSetupSection
                       styles={styles}
@@ -1635,6 +1773,177 @@ const App = () => {
           </>
         )}
       </div>
+
+      {/* DOCUMENTATION VIEWER MODAL */}
+      {activeDocModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '20px',
+            boxSizing: 'border-box'
+          }}
+          onClick={closeDocViewer}
+        >
+          <div
+            style={{
+              backgroundColor: config.panelColor,
+              border: `2px solid ${effHighlightColor}`,
+              borderRadius: '8px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
+              overflow: 'hidden'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderBottom: `1px solid ${hexToRgba(config.panelBorderColor, 0.3)}`,
+              backgroundColor: hexToRgba(config.backgroundColor, 0.4),
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.2rem' }}>📚</span>
+                <h3 style={{ margin: 0, color: effHighlightColor, fontSize: '1rem' }}>
+                  {activeDocTitle} <span style={{ opacity: 0.6, fontSize: '0.8rem', fontWeight: 'normal' }}>({activeDocModal})</span>
+                </h3>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <a
+                  href={activeDocModal}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    ...styles.button,
+                    margin: 0,
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    backgroundColor: config.panelColor,
+                    border: `1px solid ${effSecondaryButtonBgColor}`,
+                    color: config.textColor,
+                    textDecoration: 'none'
+                  }}
+                >
+                  {t('openDocTab')} ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={closeDocViewer}
+                  style={{
+                    ...styles.button,
+                    margin: 0,
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                    backgroundColor: hexToRgba(config.errorColor, 0.2),
+                    border: `1px solid ${config.errorColor}`,
+                    color: config.errorColor,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕ {t('closeDocModal')}
+                </button>
+              </div>
+            </div>
+
+            {/* Document Tabs */}
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              padding: '10px 20px',
+              backgroundColor: hexToRgba(config.backgroundColor, 0.3),
+              borderBottom: `1px solid ${hexToRgba(config.panelBorderColor, 0.2)}`,
+              overflowX: 'auto'
+            }}>
+              <button
+                type="button"
+                onClick={() => openDocViewer(config.language === 'fr' ? 'APP_OPTIONS_FR.md' : 'APP_OPTIONS.md', t('docOptionsRef'))}
+                style={{
+                  ...styles.button,
+                  margin: 0,
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  backgroundColor: activeDocModal?.includes('APP_OPTIONS') ? effPrimaryButtonBgColor : config.panelColor,
+                  color: activeDocModal?.includes('APP_OPTIONS') ? config.buttonTextColor : config.textColor,
+                  border: `1px solid ${activeDocModal?.includes('APP_OPTIONS') ? effHighlightColor : 'transparent'}`
+                }}
+              >
+                ⚙️ {t('docOptionsRef')}
+              </button>
+              <button
+                type="button"
+                onClick={() => openDocViewer(config.language === 'fr' ? 'README_FR.md' : 'README.md', t('docMainGuide'))}
+                style={{
+                  ...styles.button,
+                  margin: 0,
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  backgroundColor: activeDocModal?.includes('README') ? effPrimaryButtonBgColor : config.panelColor,
+                  color: activeDocModal?.includes('README') ? config.buttonTextColor : config.textColor,
+                  border: `1px solid ${activeDocModal?.includes('README') ? effHighlightColor : 'transparent'}`
+                }}
+              >
+                📖 {t('docMainGuide')}
+              </button>
+              <button
+                type="button"
+                onClick={() => openDocViewer('GITHUB_PAGES_LOCAL_GUIDE.md', t('docGitHubPagesGuide'))}
+                style={{
+                  ...styles.button,
+                  margin: 0,
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  backgroundColor: activeDocModal?.includes('GITHUB_PAGES') ? effPrimaryButtonBgColor : config.panelColor,
+                  color: activeDocModal?.includes('GITHUB_PAGES') ? config.buttonTextColor : config.textColor,
+                  border: `1px solid ${activeDocModal?.includes('GITHUB_PAGES') ? effHighlightColor : 'transparent'}`
+                }}
+              >
+                🚀 {t('docGitHubPagesGuide')}
+              </button>
+            </div>
+
+            {/* Document Body */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px',
+              backgroundColor: hexToRgba(config.backgroundColor, 0.7),
+              color: config.textColor,
+              fontFamily: 'monospace',
+              fontSize: '0.85rem',
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
+            }}>
+              {loadingDoc ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: effSecondaryTextColor }}>
+                  ⌛ Loading {activeDocModal}...
+                </div>
+              ) : (
+                docContent
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

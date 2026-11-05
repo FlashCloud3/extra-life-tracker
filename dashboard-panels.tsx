@@ -694,8 +694,9 @@ export const CoreSetupSection: React.FC<CoreSetupSectionProps> = ({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <input
+          id="checkbox-autodetect-team"
           type="checkbox"
-          checked={config.useParticipantTeamId}
+          checked={config.useParticipantTeamId ?? true}
           onChange={e => {
             const checked = e.target.checked;
             updateConfig({ useParticipantTeamId: checked });
@@ -707,18 +708,18 @@ export const CoreSetupSection: React.FC<CoreSetupSectionProps> = ({
             }
           }}
         />
-        <label style={{ ...styles.label, opacity: 1, cursor: 'pointer', flexGrow: 1 }}>{t('autoDetect')}</label>
+        <label htmlFor="checkbox-autodetect-team" style={{ ...styles.label, opacity: 1, cursor: 'pointer', flexGrow: 1 }}>{t('autoDetect')}</label>
       </div>
 
       <label style={config.useParticipantTeamId ? { ...styles.label, opacity: 0.75 } : styles.label}>{t('teamId')}</label>
       <input
         type="text"
-        value={config.useParticipantTeamId ? (config.teamId || teamIdInput) : teamIdInput}
+        value={config.useParticipantTeamId ? (config.teamId || '') : teamIdInput}
         onChange={(e) => {
           setTeamIdInput(e.target.value);
           updateConfig({ teamId: e.target.value });
         }}
-        placeholder={config.useParticipantTeamId ? (config.teamId || t('autoDetect')) : t('teamId')}
+        placeholder={config.useParticipantTeamId ? (config.teamId || t('noTeamLinked')) : t('teamId')}
         style={{ ...styles.input, ...(config.useParticipantTeamId && { backgroundColor: hexToRgba(config.panelColor, 0.5), cursor: 'not-allowed' }) }}
         disabled={config.useParticipantTeamId}
       />

@@ -37,8 +37,8 @@ La barre de navigation supérieure propose trois vues principales :
 Situé dans la section **Configuration Principale** :
 * **Langue (`Language`) :** Basculez dynamiquement l'ensemble de l'interface entre le **Français (`fr`)** et l'**Anglais (`en`)**. Toutes les traductions sont définies dans `translations.js`.
 * **Identifiant Participant (`Participant ID`) :** Votre identifiant numérique unique Extra Life (ex. `534123` extrait de l'URL de votre page de collecte `extra-life.org/participant/534123`).
-* **Détection automatique de l'Équipe (`Auto-detect Team ID`) :** Interroge automatiquement DonorDrive pour identifier et associer l'équipe à laquelle appartient votre participant.
-* **Identifiant d'Équipe (`Team ID`) :** Définissez manuellement l'identifiant de votre équipe Extra Life si vous souhaitez suivre une équipe indépendamment.
+* **Détection automatique de l'Équipe (`Auto-detect Team ID`) :** Activé par défaut. Interroge automatiquement DonorDrive pour identifier et associer l'équipe à laquelle appartient votre participant. Si vous diffusez en solo sans équipe, tout fonctionne normalement sans interruption et un message informatif s'affiche.
+* **Identifiant d'Équipe (`Team ID`) :** Définissez manuellement l'identifiant de votre équipe Extra Life si vous souhaitez suivre une équipe indépendamment (grisé lorsque la détection automatique est active).
 * **Intervalle d'actualisation (`Refresh Interval`) (secondes) :** Fréquence à laquelle l'application interroge l'API Extra Life pour récupérer les nouvelles données (minimum 15s ; 60s recommandées).
 * **Mode Devise (`Currency Mode`) :**
   * **USD ($) :** Devise standard d'Extra Life.

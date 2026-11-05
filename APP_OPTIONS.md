@@ -38,8 +38,8 @@ The top navigation bar provides three primary views:
 Located under **Core Setup**:
 * **Language:** Switch the entire UI dynamically between **English (`en`)** and **French (`fr`)**. All translations are defined in `translations.js`.
 * **Participant ID:** Your unique Extra Life numeric ID (e.g. `534123` from your fundraising page URL `extra-life.org/participant/534123`).
-* **Auto-detect Team ID:** Automatically queries DonorDrive to find and link the team your participant belongs to.
-* **Team ID:** Manually set your Extra Life Team ID if you want to track a team independently.
+* **Auto-detect Team ID:** Enabled by default. Automatically queries DonorDrive to find and link the team your participant belongs to. If you are fundraising solo and do not belong to a team, nothing breaks and team stats remain cleanly reset with a friendly informational notice.
+* **Team ID:** Manually set your Extra Life Team ID if you want to track a team independently (disabled when auto-detect is active).
 * **Refresh Interval (seconds):** How frequently the app polls the Extra Life API for new data (minimum 15s; 60s recommended).
 * **Currency Mode:**
   * **USD ($):** Standard Extra Life currency.

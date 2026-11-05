@@ -47,6 +47,7 @@ describe('Modular Core Utilities & Config', () => {
       expect(DEFAULT_CONFIG.refreshInterval).toBe(60);
       expect(DEFAULT_CONFIG.theme).toBe('neon-vibe');
       expect(DEFAULT_CONFIG.isSoundEnabled).toBe(true);
+      expect(DEFAULT_CONFIG.useParticipantTeamId).toBe(true);
     });
   });
 
@@ -394,6 +395,131 @@ describe('Modular Core Utilities & Config', () => {
       });
       expect(el).toBeTruthy();
       expect(el.type).toBeDefined();
+    });
+
+    test('noTeamLinked localization keys exist in both English and French', async () => {
+      const { translations } = await import('./translations.js');
+      const keys = ['noTeamLinked', 'noTeamLinkedTitle', 'noTeamLinkedDesc', 'autoDetect'];
+      for (const k of keys) {
+        expect(translations.en[k]).toBeDefined();
+        expect(translations.fr[k]).toBeDefined();
+      }
+    });
+
+    test('Team overlays render safely when participant has no team (solo streamer)', async () => {
+      const React = (await import('react')).default;
+      const { TeamDashboardView, TeamHeaderOverlay, TeamDonationsOverlay, GraphOverlay } = await import('./overlays.js');
+
+      // 1. TeamDashboardView with no team
+      const dashboardEl = React.createElement(TeamDashboardView, {
+        styles: { statHero: {}, bigStat: {}, secondaryStat: {}, card: {}, input: {}, button: {} },
+        config: { panelColor: '#111', textColor: '#fff', fontFamily: 'sans-serif', teamId: '' },
+        currencyPrefix: '$',
+        convertAmount: (amt) => amt,
+        teamTotalRaised: 0,
+        teamGoal: 0,
+        teamName: '',
+        teamDonations: [],
+        teamParticipants: [],
+        participantId: '12345',
+        participantName: 'Solo Streamer',
+        participantDonations: [],
+        participantTotalRaised: 50,
+        participantGoal: 100,
+        selectedAccountId: '12345',
+        setSelectedAccountId: () => {},
+        t: (k, vars) => (vars ? `${k}` : k),
+        effHeaderColor: '#fff',
+        effSecondaryTextColor: '#aaa',
+        effPrimaryButtonBgColor: '#0088ff',
+        effSecondaryButtonBgColor: '#0055aa',
+        effDividerColor: '#333',
+        effHighlightColor: '#00ffff',
+        effDonorNameColor: '#ffff00',
+        effProgressBarColor: '#00ff00',
+        hexToRgba: (hex, a) => `rgba(0,0,0,${a})`,
+        lastFetchedAt: new Date()
+      });
+      expect(React.isValidElement(dashboardEl)).toBe(true);
+
+      // 2. TeamHeaderOverlay with no team
+      const headerEl = React.createElement(TeamHeaderOverlay, {
+        styles: { progressBarContainer: {} },
+        currencyPrefix: '$',
+        convertAmount: (amt) => amt,
+        teamTotalRaised: 0,
+        teamGoal: 0,
+        teamName: '',
+        teamDonationsCount: 0,
+        config: { panelColor: '#111', textColor: '#fff' },
+        effHeaderColor: '#fff',
+        effSecondaryTextColor: '#aaa',
+        effProgressBarColor: '#00ff00',
+        hexToRgba: (hex, a) => `rgba(0,0,0,${a})`,
+        t: (k) => k
+      });
+      expect(React.isValidElement(headerEl)).toBe(true);
+
+      // 3. TeamDonationsOverlay with no team
+      const donationsEl = React.createElement(TeamDonationsOverlay, {
+        styles: { input: {} },
+        currencyPrefix: '$',
+        convertAmount: (amt) => amt,
+        teamTotalRaised: 0,
+        teamName: '',
+        teamDonations: [],
+        config: { panelColor: '#111', textColor: '#fff' },
+        effHeaderColor: '#fff',
+        effSecondaryTextColor: '#aaa',
+        effDividerColor: '#333',
+        effHighlightColor: '#00ffff',
+        effDonorNameColor: '#ffff00',
+        hexToRgba: (hex, a) => `rgba(0,0,0,${a})`,
+        t: (k) => k
+      });
+      expect(React.isValidElement(donationsEl)).toBe(true);
+
+      // 4. GraphOverlay with no team
+      const graphEl = React.createElement(GraphOverlay, {
+        styles: { card: {}, button: {} },
+        config: { panelColor: '#111', textColor: '#fff', fontFamily: 'sans-serif' },
+        donations: [],
+        milestones: [],
+        goal: 0,
+        totalRaised: 0,
+        currencyPrefix: '$',
+        convertAmount: (amt) => amt,
+        t: (k) => k,
+        entityName: 'Team',
+        isTeam: true,
+        effHighlightColor: '#00ffff',
+        effHeaderColor: '#fff',
+        effSecondaryTextColor: '#aaa',
+        effDividerColor: '#333',
+        effPrimaryButtonBgColor: '#0088ff',
+        effSecondaryButtonBgColor: '#0055aa',
+        hexToRgba: (hex, a) => `rgba(0,0,0,${a})`,
+        isTransparent: false
+      });
+      expect(React.isValidElement(graphEl)).toBe(true);
+    });
+
+    test('Documentation localization keys exist in both English and French', async () => {
+      const { translations } = await import('./translations.js');
+      const docKeys = [
+        'documentationLinks',
+        'docHeaderSubtitle',
+        'docOptionsRef',
+        'docMainGuide',
+        'docGitHubPagesGuide',
+        'viewDocInApp',
+        'openDocTab',
+        'closeDocModal'
+      ];
+      for (const k of docKeys) {
+        expect(translations.en[k]).toBeDefined();
+        expect(translations.fr[k]).toBeDefined();
+      }
     });
   });
 });

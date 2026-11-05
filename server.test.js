@@ -152,4 +152,26 @@ describe('Backend Logic', () => {
       );
     });
   });
+
+  describe('Team Auto-detection & Missing Team Safety', () => {
+    test('Clears teamId and resets team stats when participant has no team', async () => {
+      config.useParticipantTeamId = true;
+      config.teamId = '999';
+
+      // Mock API returning participant with NO team (teamID: null)
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ sumDonations: 75, fundraisingGoal: 200, teamID: null }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+      await fetchData();
+
+      expect(config.teamId).toBe('');
+      expect(data.teamTotalRaised).toBe(0);
+      expect(data.teamGoal).toBe(0);
+      expect(data.teamName).toBe('');
+      expect(data.teamDonations).toEqual([]);
+      expect(data.teamParticipants).toEqual([]);
+    });
+  });
 });

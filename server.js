@@ -298,7 +298,7 @@ const PORT = 3000;
 const DEFAULT_CONFIG = {
     participantId: '',
     teamId: '',
-    useParticipantTeamId: false,
+    useParticipantTeamId: true,
     theme: 'neon-vibe',
     refreshInterval: 60,
     currency: 'USD',
@@ -646,12 +646,21 @@ export async function fetchProfileData(profile) {
         let currentTeamId = profile.config.teamId;
         let configUpdated = false;
 
-        if (profile.config.useParticipantTeamId && userJson?.teamID) {
-            const apiTeamId = String(userJson.teamID);
-            if (apiTeamId !== String(profile.config.teamId)) {
-                 profile.config.teamId = apiTeamId;
-                 currentTeamId = apiTeamId;
-                 configUpdated = true;
+        if (profile.config.useParticipantTeamId) {
+            if (userJson && userJson.teamID) {
+                const apiTeamId = String(userJson.teamID);
+                if (apiTeamId !== String(profile.config.teamId || '')) {
+                     profile.config.teamId = apiTeamId;
+                     currentTeamId = apiTeamId;
+                     configUpdated = true;
+                }
+            } else if (userJson && !userJson.teamID) {
+                // Participant has no team linked
+                if (profile.config.teamId) {
+                     profile.config.teamId = '';
+                     currentTeamId = '';
+                     configUpdated = true;
+                }
             }
         }
         
@@ -663,9 +672,9 @@ export async function fetchProfileData(profile) {
         if (currentTeamId) {
              try {
                  const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
-                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`).catch(e => null),
-                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).catch(e => null),
-                     fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/participants`).catch(e => null)
+                     Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`)).catch(e => null),
+                     Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`)).catch(e => null),
+                     Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/participants`)).catch(e => null)
                  ]);
                  if (teamRes && teamRes.ok) {
                      const teamJson = await teamRes.json();
@@ -674,18 +683,37 @@ export async function fetchProfileData(profile) {
                          profile.data.teamGoal = teamJson.fundraisingGoal || 0;
                          profile.data.teamName = teamJson.name || '';
                      }
+                 } else {
+                     profile.data.teamTotalRaised = 0;
+                     profile.data.teamGoal = 0;
+                     profile.data.teamName = '';
                  }
                  if (teamDonRes && teamDonRes.ok) {
                      const teamDonJson = await teamDonRes.json();
                      profile.data.teamDonations = Array.isArray(teamDonJson) ? teamDonJson : [];
+                 } else {
+                     profile.data.teamDonations = [];
                  }
                  if (teamPartRes && teamPartRes.ok) {
                      const teamPartJson = await teamPartRes.json();
                      profile.data.teamParticipants = Array.isArray(teamPartJson) ? teamPartJson : [];
+                 } else {
+                     profile.data.teamParticipants = [];
                  }
              } catch (e) {
                  console.warn(`[${profile.id}] Error fetching team details:`, e.message);
+                 profile.data.teamTotalRaised = 0;
+                 profile.data.teamGoal = 0;
+                 profile.data.teamName = '';
+                 profile.data.teamDonations = [];
+                 profile.data.teamParticipants = [];
              }
+        } else {
+             profile.data.teamTotalRaised = 0;
+             profile.data.teamGoal = 0;
+             profile.data.teamName = '';
+             profile.data.teamDonations = [];
+             profile.data.teamParticipants = [];
         }
 
         await fetchProfileConversionRate(profile);
