@@ -664,5 +664,12 @@ describe('Modular Core Utilities & Config', () => {
       expect(Array.isArray(manifest)).toBe(true);
       expect(manifest.length).toBeGreaterThan(0);
     });
+
+    test('hooks/use-audio-alerts.js resolves sound files relatively for GitHub Pages compatibility', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('hooks/use-audio-alerts.js', 'utf8');
+      expect(content).toContain("sounds/${urlOrFilename}");
+      expect(content).not.toContain("`/sounds/${urlOrFilename}`");
+    });
   });
 });

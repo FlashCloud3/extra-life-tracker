@@ -878,7 +878,7 @@ const App = () => {
       const newSound: CustomSound = {
           id: `sound-${Date.now()}`,
           name: selectedSoundFile,
-          data: `/sounds/${selectedSoundFile}`
+          data: `sounds/${selectedSoundFile}`
       };
       updateConfig({ customSounds: [...config.customSounds, newSound] });
   };

@@ -83,7 +83,10 @@ export function useAudioAlerts({ config }) {
       if (sound.data.startsWith('data:')) {
         arrayBuffer = dataUrlToArrayBuffer(sound.data);
       } else {
-        const response = await fetch(sound.data);
+        const soundUrl = (sound.data.startsWith('/sounds/') || sound.data.startsWith('sounds/'))
+          ? sound.data.replace(/^\/+/, '')
+          : sound.data;
+        const response = await fetch(soundUrl);
         arrayBuffer = await response.arrayBuffer();
       }
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
@@ -165,9 +168,11 @@ export function useAudioAlerts({ config }) {
     const currentConfig = configRef.current;
     if (!currentConfig.isSoundEnabled) return;
 
-    const url = urlOrFilename.startsWith('data:') || urlOrFilename.startsWith('/') || urlOrFilename.startsWith('http')
+    const url = urlOrFilename.startsWith('data:') || urlOrFilename.startsWith('http')
       ? urlOrFilename
-      : `/sounds/${urlOrFilename}`;
+      : urlOrFilename.startsWith('sounds/') || urlOrFilename.startsWith('/sounds/')
+        ? urlOrFilename.replace(/^\/+/, '')
+        : `sounds/${urlOrFilename}`;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
