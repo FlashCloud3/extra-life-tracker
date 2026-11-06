@@ -650,5 +650,19 @@ describe('Modular Core Utilities & Config', () => {
       expect(content).toContain('recentToastIdsRef');
       expect(content).toContain('recentToastIdsRef.current.has(donId)');
     });
+
+    test('index.tsx supports static folder manifests (sponsors.json) for GitHub Pages', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('index.tsx', 'utf8');
+      expect(content).toContain('sponsors/sponsors.json');
+      expect(content).toContain('sounds/sounds.json');
+      expect(content).toContain('text_files/text_files.json');
+
+      const manifestExists = fs.existsSync('sponsors/sponsors.json');
+      expect(manifestExists).toBe(true);
+      const manifest = JSON.parse(fs.readFileSync('sponsors/sponsors.json', 'utf8'));
+      expect(Array.isArray(manifest)).toBe(true);
+      expect(manifest.length).toBeGreaterThan(0);
+    });
   });
 });

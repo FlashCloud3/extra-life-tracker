@@ -3876,7 +3876,7 @@ export const SponsorsSection = ({
       fontSize: '0.8rem',
       color: config.textColor
     }
-  })), availableSponsorFiles.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("label", {
+  })), /*#__PURE__*/React.createElement("label", {
     style: styles.label
   }, t('addSponsorFromFolder')), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3890,13 +3890,15 @@ export const SponsorsSection = ({
       ...styles.input,
       flexGrow: 1
     }
-  }, availableSponsorFiles.map(file => /*#__PURE__*/React.createElement("option", {
+  }, availableSponsorFiles.length === 0 && /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, t('noSponsorsFound')), availableSponsorFiles.map(file => /*#__PURE__*/React.createElement("option", {
     key: file,
     value: file
   }, file))), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: handleAddSponsorFromList,
-    disabled: !selectedSponsorFile,
+    disabled: availableSponsorFiles.length === 0 || !selectedSponsorFile,
     style: {
       ...styles.button,
       backgroundColor: config.accentColor1,
@@ -3912,7 +3914,7 @@ export const SponsorsSection = ({
       opacity: 0.7,
       marginTop: '5px'
     }
-  }, t('sponsorFolderHint'))));
+  }, t('sponsorFolderHint')));
 };
 
 // ==========================================

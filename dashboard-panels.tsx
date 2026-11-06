@@ -2915,33 +2915,30 @@ export const SponsorsSection: React.FC<SponsorsSectionProps> = ({
         />
       </div>
 
-      {availableSponsorFiles.length > 0 && (
-        <>
-          <label style={styles.label}>{t('addSponsorFromFolder')}</label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <select
-              value={selectedSponsorFile}
-              onChange={(e) => setSelectedSponsorFile(e.target.value)}
-              style={{ ...styles.input, flexGrow: 1 }}
-            >
-              {availableSponsorFiles.map(file => (
-                <option key={file} value={file}>{file}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleAddSponsorFromList}
-              disabled={!selectedSponsorFile}
-              style={{ ...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0 }}
-            >
-              {t('add')}
-            </button>
-          </div>
-          <p style={{ fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px' }}>
-            {t('sponsorFolderHint')}
-          </p>
-        </>
-      )}
+      <label style={styles.label}>{t('addSponsorFromFolder')}</label>
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <select
+          value={selectedSponsorFile}
+          onChange={(e) => setSelectedSponsorFile(e.target.value)}
+          style={{ ...styles.input, flexGrow: 1 }}
+        >
+          {availableSponsorFiles.length === 0 && <option value="">{t('noSponsorsFound')}</option>}
+          {availableSponsorFiles.map(file => (
+            <option key={file} value={file}>{file}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleAddSponsorFromList}
+          disabled={availableSponsorFiles.length === 0 || !selectedSponsorFile}
+          style={{ ...styles.button, backgroundColor: config.accentColor1, color: config.buttonTextColor, fontSize: '1rem', padding: '10px 20px', margin: 0 }}
+        >
+          {t('add')}
+        </button>
+      </div>
+      <p style={{ fontSize: '0.8rem', color: config.textColor, opacity: 0.7, marginTop: '5px' }}>
+        {t('sponsorFolderHint')}
+      </p>
     </CollapsibleSection>
   );
 };
