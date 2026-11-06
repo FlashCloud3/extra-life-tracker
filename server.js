@@ -269,13 +269,42 @@ app.post('/api/test-donation', async (req, res) => {
     
     const payload = { donation: fakeDonation, isMilestone: false };
     io.to(`profile:${profile.id}`).emit('event:donation', payload);
-    if (profile.id !== 'default') {
-        io.to('profile:default').emit('event:donation', payload);
-    } else {
-        io.emit('event:donation', payload);
-    }
     io.to(`profile:${profile.id}`).emit('data-updated', profile.data);
     res.json({ success: true, message: 'Test donation triggered.', profile: profileId, amount: testAmount });
+});
+
+// Documentation Endpoint with in-memory caching and cache headers to avoid rate limits
+const DOCS_CACHE = new Map();
+app.get('/api/docs/:filename', async (req, res) => {
+    try {
+        const rawFilename = path.basename(req.params.filename);
+        const allowedDocs = [
+            'README.md',
+            'README_FR.md',
+            'APP_OPTIONS.md',
+            'APP_OPTIONS_FR.md',
+            'GITHUB_PAGES_LOCAL_GUIDE.md'
+        ];
+        if (!allowedDocs.includes(rawFilename)) {
+            return res.status(404).send('Document not found');
+        }
+
+        if (DOCS_CACHE.has(rawFilename)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=86400');
+            res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+            return res.send(DOCS_CACHE.get(rawFilename));
+        }
+
+        const filePath = path.join(__dirname, rawFilename);
+        const content = await fs.readFile(filePath, 'utf-8');
+        DOCS_CACHE.set(rawFilename, content);
+
+        res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=86400');
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.send(content);
+    } catch (e) {
+        res.status(500).send('Error reading document');
+    }
 });
 
 // --- STATIC SERVING (Must be AFTER API routes) ---
@@ -459,11 +488,37 @@ export async function setupProfileTwitchClient(profile) {
         console.log(`[${profile.id}] Initializing Twitch connection...`);
         const client = new tmi.Client({
             options: { debug: false },
+            logger: {
+                info: () => {},
+                warn: (msg) => {
+                    if (typeof msg === 'string' && (msg.includes('Login authentication failed') || msg.includes('login_unsuccessful'))) return;
+                    console.warn(`[${profile.id}] Twitch:`, msg);
+                },
+                error: (msg) => {
+                    if (typeof msg === 'string' && (msg.includes('Login authentication failed') || msg.includes('login_unsuccessful'))) return;
+                    console.warn(`[${profile.id}] Twitch:`, msg);
+                }
+            },
+            connection: {
+                reconnect: false,
+                secure: true
+            },
             identity: {
                 username: profile.config.twitchChannel,
                 password: profile.config.twitchToken
             },
             channels: [profile.config.twitchChannel]
+        });
+
+        client.on('error', () => {
+            // Absorb unhandled connection errors
+        });
+
+        client.on('notice', (channel, msgid) => {
+            if (msgid === 'login_unsuccessful') {
+                profile.twitchStatus = { state: 'error', channel: profile.config.twitchChannel, error: 'Login authentication failed' };
+                io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
+            }
         });
 
         client.on('message', (channel, tags, message, self) => {
@@ -506,8 +561,10 @@ export async function setupProfileTwitchClient(profile) {
             profile.twitchStatus = { state: 'connected', channel: profile.config.twitchChannel, error: null };
             io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         } catch (e) {
-            console.error(`[${profile.id}] Failed to connect to Twitch:`, e);
-            profile.twitchStatus = { state: 'error', channel: profile.config.twitchChannel, error: e.message || String(e) };
+            console.warn(`[${profile.id}] Twitch connection failed (check credentials): ${e?.message || e}`);
+            try { await client.disconnect(); } catch (_) {}
+            profile.twitchClient = null;
+            profile.twitchStatus = { state: 'error', channel: profile.config.twitchChannel, error: e?.message || String(e) };
             io.to(`profile:${profile.id}`).emit('twitch-status', profile.twitchStatus);
         }
     }
@@ -604,7 +661,6 @@ export async function fetchProfileData(profile) {
                                             createdDateUTC: d.createdDateUTC
                                         };
                                         io.to(`profile:${profile.id}`).emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
-                                        io.emit('event:donation', { donation: donationObj, isMilestone: milestoneCrossed });
                                         
                                         if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
                                             const currencyPrefix = profile.config.currency === 'CAD' ? 'C$' : '$';
@@ -838,9 +894,6 @@ io.on('connection', (socket) => {
             isMilestone = true;
             const celebPayload = { type: 'milestone', milestone: passedMilestones[0] };
             io.to(`profile:${profile.id}`).emit('event:celebration', celebPayload);
-            if (profile.id !== 'default') {
-                io.to('profile:default').emit('event:celebration', celebPayload);
-            }
             if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
                 profile.twitchClient.say(profile.config.twitchChannel, `🎉 MILESTONE UNLOCKED: ${passedMilestones[0].description}!`);
             }
@@ -848,9 +901,6 @@ io.on('connection', (socket) => {
             isMilestone = true;
             const celebPayload = { type: 'milestone', milestone: { description: 'Fundraising Goal Reached!' } };
             io.to(`profile:${profile.id}`).emit('event:celebration', celebPayload);
-            if (profile.id !== 'default') {
-                io.to('profile:default').emit('event:celebration', celebPayload);
-            }
             if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
                 profile.twitchClient.say(profile.config.twitchChannel, `🎉 GOAL REACHED! We did it!`);
             }
@@ -858,11 +908,6 @@ io.on('connection', (socket) => {
 
         const donationPayload = { donation: fakeDonation, isMilestone: isMilestone };
         io.to(`profile:${profile.id}`).emit('event:donation', donationPayload);
-        if (profile.id !== 'default') {
-            io.to('profile:default').emit('event:donation', donationPayload);
-        } else {
-            socket.broadcast.emit('event:donation', donationPayload);
-        }
         
         if (profile.config.twitchEnableAlerts && profile.twitchClient && profile.twitchClient.readyState() === 'OPEN') {
             const currencyPrefix = profile.config.currency === 'CAD' ? 'C$' : '$';
@@ -871,18 +916,10 @@ io.on('connection', (socket) => {
         }
 
         io.to(`profile:${profile.id}`).emit('data-updated', profile.data);
-        if (profile.id !== 'default') {
-            io.to('profile:default').emit('data-updated', profile.data);
-        }
     });
 
     socket.on('trigger-clear', (profileId = 'default') => {
         io.to(`profile:${profileId}`).emit('event:clear');
-        if (profileId !== 'default') {
-            io.to('profile:default').emit('event:clear');
-        } else {
-            socket.broadcast.emit('event:clear');
-        }
     });
 });
 

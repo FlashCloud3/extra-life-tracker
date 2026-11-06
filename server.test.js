@@ -71,12 +71,22 @@ describe('Backend Logic', () => {
 
   describe('Donation Sync', () => {
     test('Subsequent fetch emits event for NEW donation', async () => {
-      const emitSpy = jest.spyOn(io, 'emit');
+      const emittedEvents = [];
+      const originalTo = io.to.bind(io);
+      const toSpy = jest.spyOn(io, 'to').mockImplementation((room) => {
+        const roomObj = originalTo(room);
+        return {
+          ...roomObj,
+          emit: (event, data) => {
+            emittedEvents.push({ room, event, data });
+            return roomObj.emit(event, data);
+          }
+        };
+      });
       
       // Initial Load
       mockApiResponse(100, 500, [{ donationID: 'd1', amount: 50 }]);
       await fetchData();
-      emitSpy.mockClear();
 
       // New Donation
       mockApiResponse(125, 500, [
@@ -87,9 +97,13 @@ describe('Backend Logic', () => {
       await fetchData();
 
       expect(data.totalRaised).toBe(125);
-      expect(emitSpy).toHaveBeenCalledWith('event:donation', expect.objectContaining({
+      expect(toSpy).toHaveBeenCalledWith('profile:default');
+      const donationEvent = emittedEvents.find(e => e.event === 'event:donation');
+      expect(donationEvent).toBeDefined();
+      expect(donationEvent.data).toMatchObject({
         donation: expect.objectContaining({ donationID: 'd2', amount: 25 })
-      }));
+      });
+      toSpy.mockRestore();
     });
   });
 

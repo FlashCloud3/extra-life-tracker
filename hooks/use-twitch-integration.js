@@ -113,9 +113,20 @@ export function useTwitchIntegration({
     try {
       client = new ClientConstructor({
         options: { debug: false },
+        logger: {
+          info: () => {},
+          warn: (msg) => {
+            if (typeof msg === 'string' && (msg.includes('Login authentication failed') || msg.includes('login_unsuccessful'))) return;
+            console.warn('[Twitch]', msg);
+          },
+          error: (msg) => {
+            if (typeof msg === 'string' && (msg.includes('Login authentication failed') || msg.includes('login_unsuccessful'))) return;
+            console.warn('[Twitch]', msg);
+          }
+        },
         connection: {
-          reconnect: true,
-          maxReconnectAttempts: 5,
+          reconnect: false,
+          maxReconnectAttempts: 2,
           maxReconnectInterval: 30000
         },
         identity: {
@@ -123,6 +134,10 @@ export function useTwitchIntegration({
           password: cleanToken
         },
         channels: [cleanChannel]
+      });
+
+      client.on('error', () => {
+        // Suppress unhandled socket error events
       });
 
       client.on('connected', () => {
@@ -149,6 +164,7 @@ export function useTwitchIntegration({
         if (msgid === 'login_unsuccessful') {
           setTwitchStatus('error');
           setTwitchStatusMessage(`Login failed: Invalid OAuth token for #${cleanChannel}`);
+          try { client?.disconnect(); } catch (e) {}
         }
       });
 
@@ -162,8 +178,9 @@ export function useTwitchIntegration({
         if (!isSubscribed) return;
         setTwitchStatus('error');
         const errStr = typeof err === 'string' ? err : (err?.message || 'Connection failed');
-        setTwitchStatusMessage(errStr);
+        setTwitchStatusMessage(errStr.includes('Login authentication failed') ? 'Login authentication failed. Please verify your channel name and OAuth token.' : errStr);
         twitchClientRef.current = null;
+        try { client?.disconnect(); } catch (e) {}
       });
 
       client.on('message', (channel, tags, message, self) => {

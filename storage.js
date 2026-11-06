@@ -138,7 +138,13 @@ export const getUrlProfile = () => {
   if (typeof window === 'undefined') return 'default';
   const params = new URLSearchParams(window.location.search);
   const urlProf = params.get('profile');
-  if (urlProf) return urlProf;
+  if (urlProf) {
+    try {
+      return decodeURIComponent(urlProf).trim() || 'default';
+    } catch (e) {
+      return urlProf.trim() || 'default';
+    }
+  }
   try {
     if (typeof localStorage !== 'undefined') {
       const last = localStorage.getItem(`${STORAGE_PREFIX}last_profile`);

@@ -98,12 +98,18 @@ export function useAudioAlerts({ config }) {
     } catch (err) {}
   }, []);
 
+  const recentToastIdsRef = useRef(new Set());
+
   // Toast Queue Pacer: advances toast after 8 seconds
   useEffect(() => {
     if (activeToasts.length < MAX_VISIBLE_TOASTS && toastQueue.length > 0) {
       const nextToast = toastQueue[0];
       setToastQueue(prev => prev.slice(1));
-      setActiveToasts(prev => [...prev, nextToast]);
+      setActiveToasts(prev => {
+        // Prevent duplicate toasts in active list
+        if (prev.some(t => t.donationID === nextToast.donationID)) return prev;
+        return [...prev, nextToast];
+      });
       setTimeout(() => {
         setActiveToasts(current => current.filter(t => t.donationID !== nextToast.donationID));
       }, 8000);
@@ -111,7 +117,27 @@ export function useAudioAlerts({ config }) {
   }, [activeToasts, toastQueue]);
 
   const triggerDonationToast = useCallback((donation, playAudio = true) => {
-    setToastQueue(prev => [...prev, donation]);
+    if (!donation) return;
+    const donId = donation.donationID;
+
+    // Deduplicate: ignore if this donation was recently queued or displayed
+    if (donId && recentToastIdsRef.current.has(donId)) {
+      return;
+    }
+    if (donId) {
+      recentToastIdsRef.current.add(donId);
+      // Keep recent set bounded to 500 items to avoid memory growth
+      if (recentToastIdsRef.current.size > 500) {
+        const first = recentToastIdsRef.current.values().next().value;
+        recentToastIdsRef.current.delete(first);
+      }
+    }
+
+    setToastQueue(prev => {
+      if (donId && prev.some(t => t.donationID === donId)) return prev;
+      return [...prev, donation];
+    });
+
     if (playAudio) {
       playSpecificSound(configRef.current.selectedSound);
     }
@@ -127,6 +153,7 @@ export function useAudioAlerts({ config }) {
   }, [playSpecificSound]);
 
   const clearAlerts = useCallback(() => {
+    recentToastIdsRef.current.clear();
     setActiveToasts([]);
     setToastQueue([]);
     setCelebrationKey(0);

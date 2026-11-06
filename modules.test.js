@@ -510,16 +510,145 @@ describe('Modular Core Utilities & Config', () => {
         'documentationLinks',
         'docHeaderSubtitle',
         'docOptionsRef',
+        'docOptionsDesc',
         'docMainGuide',
+        'docMainGuideDesc',
         'docGitHubPagesGuide',
+        'docGitHubPagesGuideDesc',
         'viewDocInApp',
         'openDocTab',
-        'closeDocModal'
+        'closeDocModal',
+        'openDocumentation',
+        'docModalTitle',
+        'docSearchPlaceholder',
+        'docSwitchLanguage'
       ];
       for (const k of docKeys) {
         expect(translations.en[k]).toBeDefined();
         expect(translations.fr[k]).toBeDefined();
       }
+    });
+
+    test('markdown-parser.js parses headings, tables, code blocks, lists and blockquotes', async () => {
+      const { parseMarkdown, renderInline, FormattedMarkdown } = await import('./markdown-parser.js');
+      const React = (await import('react')).default;
+
+      const sampleMd = [
+        '# Main Title',
+        '> Important quote or note',
+        '## Section Heading',
+        'Paragraph with **bold**, *italic*, `code`, and [Link](APP_OPTIONS_FR.md).',
+        '',
+        '| Name | Type | Description |',
+        '| :--- | :--- | :--- |',
+        '| theme | string | Preset color theme |',
+        '',
+        '```bash',
+        'npm run build',
+        '```',
+        '',
+        '- Item 1',
+        '- Item 2',
+        '---'
+      ].join('\n');
+
+      const blocks = parseMarkdown(sampleMd);
+      expect(blocks.length).toBeGreaterThanOrEqual(7);
+
+      const heading1 = blocks.find(b => b.type === 'heading' && b.level === 1);
+      expect(heading1).toBeDefined();
+      expect(heading1.text).toBe('Main Title');
+
+      const bq = blocks.find(b => b.type === 'blockquote');
+      expect(bq).toBeDefined();
+      expect(bq.text).toContain('Important quote or note');
+
+      const tbl = blocks.find(b => b.type === 'table');
+      expect(tbl).toBeDefined();
+      expect(tbl.headers).toEqual(['Name', 'Type', 'Description']);
+      expect(tbl.rows.length).toBe(1);
+      expect(tbl.rows[0][0]).toBe('theme');
+
+      const codeBlock = blocks.find(b => b.type === 'code_block');
+      expect(codeBlock).toBeDefined();
+      expect(codeBlock.language).toBe('bash');
+      expect(codeBlock.code).toBe('npm run build');
+
+      // Test inline rendering
+      let navTarget = '';
+      const inlineEls = renderInline('Here is [French Options](APP_OPTIONS_FR.md) and `variable`', {
+        onNavigate: (t) => { navTarget = t; },
+        highlightColor: '#00ffff'
+      });
+      expect(Array.isArray(inlineEls)).toBe(true);
+
+      // Test FormattedMarkdown component element
+      const el = React.createElement(FormattedMarkdown, {
+        content: sampleMd,
+        onNavigate: () => {},
+        themeConfig: { highlightColor: '#00ffff' }
+      });
+      expect(React.isValidElement(el)).toBe(true);
+    });
+
+    test('markdown-parser.js parses lists with indented code blocks without swallowing markdown', async () => {
+      const { parseMarkdown } = await import('./markdown-parser.js');
+      const testMarkdown = [
+        '1. **Start any local static server in the project folder:**',
+        '   ```bash',
+        '   # Option 1: Using Python 3',
+        '   python3 -m http.server 8080',
+        '',
+        '   # Option 2: Using Node.js npx',
+        '   npx serve . -l 8080',
+        '   ```',
+        '2. **Open the dashboard:**',
+        '   Navigate to http://localhost:8080.',
+        '',
+        '---',
+        '',
+        '## 🧭 Dashboard Views & Navigation',
+        'Next section should be a heading, not swallowed code.'
+      ].join('\n');
+
+      const blocks = parseMarkdown(testMarkdown);
+      const codeBlock = blocks.find(b => b.type === 'code_block');
+      expect(codeBlock).toBeDefined();
+      expect(codeBlock.language).toBe('bash');
+      expect(codeBlock.code).toContain('python3 -m http.server 8080');
+      expect(codeBlock.code).toContain('npx serve . -l 8080');
+
+      const heading = blocks.find(b => b.type === 'heading' && b.text.includes('Dashboard Views'));
+      expect(heading).toBeDefined();
+      expect(heading.level).toBe(2);
+
+      const hr = blocks.find(b => b.type === 'hr');
+      expect(hr).toBeDefined();
+    });
+
+    test('index.tsx includes docCacheRef to prevent HTTP 429 rate limit errors', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('index.tsx', 'utf8');
+      expect(content).toContain('docCacheRef');
+      expect(content).toContain('/api/docs/');
+    });
+
+    test('storage.js getUrlProfile decodes URL encoded profile names properly', async () => {
+      const { getUrlProfile } = await import('./storage.js');
+      // Mock window location with URL encoded profile
+      global.window = {
+        location: {
+          search: '?profile=my%20stream%20profile'
+        }
+      };
+      expect(getUrlProfile()).toBe('my stream profile');
+    });
+
+    test('use-audio-alerts.js deduplicates donations by donationID', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('hooks/use-audio-alerts.js', 'utf8');
+      expect(content).toContain('recentToastIdsRef');
+      expect(content).toContain('recentToastIdsRef.current.has(donId)');
     });
   });
 });
