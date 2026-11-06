@@ -571,29 +571,52 @@ const App = () => {
     }
   }, [pendingTwitchToken, updateConfig, setPendingTwitchToken]);
 
-  // Fetch available sound and sponsor lists from server
+  // Fetch available sound, sponsor, and text lists (with static manifest fallback for GitHub Pages)
   useEffect(() => {
-    const fetchLists = () => {
-      fetch('/api/list-sponsors')
-        .then(res => res.ok ? res.json() : [])
-        .then(files => {
-          setAvailableSponsorFiles(files);
-          if (files.length > 0 && !selectedSponsorFile) setSelectedSponsorFile(files[0]);
-        })
-        .catch(console.error);
+    const fetchLists = async () => {
+      // 1. Sponsors
+      try {
+        let res = await fetch('/api/list-sponsors').catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch('sponsors/sponsors.json').catch(() => null);
+        }
+        if (res && res.ok) {
+          const files = await res.json();
+          if (Array.isArray(files)) {
+            setAvailableSponsorFiles(files);
+            if (files.length > 0) setSelectedSponsorFile(prev => prev || files[0]);
+          }
+        }
+      } catch (e) {}
 
-      fetch('/api/list-sounds')
-        .then(res => res.ok ? res.json() : [])
-        .then(files => {
-          setAvailableSoundFiles(files);
-          if (files.length > 0 && !selectedSoundFile) setSelectedSoundFile(files[0]);
-        })
-        .catch(console.error);
+      // 2. Sounds
+      try {
+        let res = await fetch('/api/list-sounds').catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch('sounds/sounds.json').catch(() => null);
+        }
+        if (res && res.ok) {
+          const files = await res.json();
+          if (Array.isArray(files)) {
+            setAvailableSoundFiles(files);
+            if (files.length > 0) setSelectedSoundFile(prev => prev || files[0]);
+          }
+        }
+      } catch (e) {}
 
-      fetch('/api/list-text-files')
-        .then(res => res.ok ? res.json() : [])
-        .then(setAvailableTextFiles)
-        .catch(console.error);
+      // 3. Text Files
+      try {
+        let res = await fetch('/api/list-text-files').catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch('text_files/text_files.json').catch(() => null);
+        }
+        if (res && res.ok) {
+          const files = await res.json();
+          if (Array.isArray(files)) {
+            setAvailableTextFiles(files);
+          }
+        }
+      } catch (e) {}
     };
     fetchLists();
   }, []);
@@ -899,7 +922,7 @@ const App = () => {
       const newSponsor: Sponsor = {
           id: `sp-${Date.now()}`,
           name: selectedSponsorFile,
-          imageUrl: `/sponsors/${selectedSponsorFile}`
+          imageUrl: `sponsors/${selectedSponsorFile}`
       };
       updateConfig({ sponsors: [...config.sponsors, newSponsor] });
   };
