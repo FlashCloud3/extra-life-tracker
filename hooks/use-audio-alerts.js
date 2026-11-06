@@ -78,18 +78,45 @@ export function useAudioAlerts({ config }) {
     // Custom sound file from memory or server
     const sound = currentConfig.customSounds?.find(s => s.id === soundId);
     if (!sound) return;
+
+    let soundUrl = sound.data;
+    if (!soundUrl.startsWith('data:') && !soundUrl.startsWith('http://') && !soundUrl.startsWith('https://')) {
+      soundUrl = soundUrl.replace(/^\.?\/?sounds\//, '');
+      soundUrl = `sounds/${soundUrl}`;
+    }
+
+    const volume = Math.max(0, Math.min(1, Number(currentConfig.notificationVolume) || 0.5));
+
+    // Try HTML5 Audio first (native MP3/WAV playback)
+    try {
+      const audio = new Audio();
+      audio.volume = volume;
+      audio.src = soundUrl;
+      activeSourcesRef.current.add(audio);
+      audio.onended = () => {
+        activeSourcesRef.current.delete(audio);
+      };
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback to Web Audio API
     try {
       let arrayBuffer;
-      if (sound.data.startsWith('data:')) {
-        arrayBuffer = dataUrlToArrayBuffer(sound.data);
+      if (soundUrl.startsWith('data:')) {
+        arrayBuffer = dataUrlToArrayBuffer(soundUrl);
       } else {
-        const soundUrl = (sound.data.startsWith('/sounds/') || sound.data.startsWith('sounds/'))
-          ? sound.data.replace(/^\/+/, '')
-          : sound.data;
         const response = await fetch(soundUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         arrayBuffer = await response.arrayBuffer();
       }
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      const decodePromise = new Promise((resolve, reject) => {
+        ctx.decodeAudioData(arrayBuffer, resolve, reject);
+      });
+      const audioBuffer = await decodePromise;
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(masterGain);
@@ -98,7 +125,9 @@ export function useAudioAlerts({ config }) {
         activeSourcesRef.current.delete(source);
       };
       source.start(startTime);
-    } catch (err) {}
+    } catch (err) {
+      console.warn('Custom sound playback error:', err);
+    }
   }, []);
 
   const recentToastIdsRef = useRef(new Set());
@@ -168,34 +197,62 @@ export function useAudioAlerts({ config }) {
     const currentConfig = configRef.current;
     if (!currentConfig.isSoundEnabled) return;
 
-    const url = urlOrFilename.startsWith('data:') || urlOrFilename.startsWith('http')
-      ? urlOrFilename
-      : urlOrFilename.startsWith('sounds/') || urlOrFilename.startsWith('/sounds/')
-        ? urlOrFilename.replace(/^\/+/, '')
-        : `sounds/${urlOrFilename}`;
-
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    const ctx = audioCtxRef.current;
-    if (ctx.state === 'suspended') {
-      try { await ctx.resume(); } catch (e) {}
+    let targetUrl = urlOrFilename;
+    if (!targetUrl.startsWith('data:') && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      // Normalize to relative sounds/ path
+      targetUrl = targetUrl.replace(/^\.?\/?sounds\//, '');
+      targetUrl = `sounds/${targetUrl}`;
     }
 
-    const startTime = ctx.currentTime + 0.05;
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(currentConfig.notificationVolume, startTime);
-    masterGain.connect(ctx.destination);
+    const volume = Math.max(0, Math.min(1, Number(currentConfig.notificationVolume) || 0.5));
 
+    // Method 1: HTML5 Audio (native hardware-accelerated playback for MP3/WAV/OGG, immune to WebAudio decode quirks)
     try {
+      const audio = new Audio();
+      audio.volume = volume;
+      audio.src = targetUrl;
+      activeSourcesRef.current.add(audio);
+      audio.onended = () => {
+        activeSourcesRef.current.delete(audio);
+      };
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+        return;
+      }
+    } catch (html5Err) {
+      // Fallback to Web Audio API if HTML5 Audio fails
+    }
+
+    // Method 2: Web Audio API Fallback
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (e) {}
+      }
+
+      const startTime = ctx.currentTime + 0.05;
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(volume, startTime);
+      masterGain.connect(ctx.destination);
+
       let arrayBuffer;
-      if (url.startsWith('data:')) {
-        arrayBuffer = dataUrlToArrayBuffer(url);
+      if (targetUrl.startsWith('data:')) {
+        arrayBuffer = dataUrlToArrayBuffer(targetUrl);
       } else {
-        const response = await fetch(url);
+        const response = await fetch(targetUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         arrayBuffer = await response.arrayBuffer();
       }
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      const decodePromise = new Promise((resolve, reject) => {
+        ctx.decodeAudioData(arrayBuffer, resolve, reject);
+      });
+      const audioBuffer = await decodePromise;
+
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(masterGain);
@@ -204,7 +261,9 @@ export function useAudioAlerts({ config }) {
         activeSourcesRef.current.delete(source);
       };
       source.start(startTime);
-    } catch (err) {}
+    } catch (err) {
+      console.warn('Audio preview error:', err);
+    }
   }, []);
 
   return {

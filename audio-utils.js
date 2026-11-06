@@ -141,7 +141,12 @@ export const stopAudioSources = (activeSources) => {
   const sourcesToStop = Array.from(activeSources);
   sourcesToStop.forEach(source => {
     try {
-      source.stop(0);
+      if (typeof source.stop === 'function') {
+        source.stop(0);
+      } else if (typeof source.pause === 'function') {
+        source.pause();
+        source.currentTime = 0;
+      }
     } catch (e) {}
   });
   activeSources.clear();

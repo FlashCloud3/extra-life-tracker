@@ -668,7 +668,7 @@ describe('Modular Core Utilities & Config', () => {
     test('hooks/use-audio-alerts.js resolves sound files relatively for GitHub Pages compatibility', async () => {
       const fs = await import('fs');
       const content = fs.readFileSync('hooks/use-audio-alerts.js', 'utf8');
-      expect(content).toContain("sounds/${urlOrFilename}");
+      expect(content).toContain("`sounds/${targetUrl}`");
       expect(content).not.toContain("`/sounds/${urlOrFilename}`");
     });
   });
