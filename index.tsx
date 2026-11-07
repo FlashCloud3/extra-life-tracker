@@ -1183,6 +1183,7 @@ const App = () => {
               effHighlightColor={effHighlightColor}
               hexToRgba={hexToRgba}
               handleChangeId={handleChangeId}
+              handleForceRefresh={fetchClientSideData}
               dashboardView={dashboardView}
               setDashboardView={setDashboardView}
               t={t}

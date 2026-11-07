@@ -224,6 +224,17 @@ The repository includes dedicated asset folders with starter media ready for imm
 
 ---
 
+## 🔋 24-Hour Marathon: Keeping the Dashboard Always Active
+
+Modern desktop browsers throttle or discard background tabs to save power and memory:
+
+1. **Prevent Tab Sleeping (Chrome):** Go to `chrome://settings/performance` > **Memory Saver** > **Always keep these sites active** > click **Add** and enter your tracker's URL.
+2. **Prevent Tab Sleeping (Edge):** Go to `edge://settings/system` > **Never put these sites to sleep** > click **Add** and enter your tracker's URL.
+3. **Audio Autoplay Permission:** After opening or refreshing the dashboard, click anywhere on the page once to unlock the browser's audio permissions so background alerts play freely.
+4. **OBS Dock Alternative:** Embed the dashboard inside OBS (**Docks** > **Custom Browser Docks...**). OBS never sleeps and has native autoplay enabled.
+
+---
+
 ## 💾 Profile Backup & Multi-User Profiles
 
 - **Multiple Profiles:** Manage multiple streamers on the same system using `?profile=PARTICIPANT_ID`. Each profile keeps completely isolated settings, colors, schedule, audio, and credentials.

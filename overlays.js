@@ -1557,7 +1557,15 @@ const TeamDashboardView = ({
     if (fetchedAccounts[activeAccountId]) return;
     let isMounted = true;
     setLoadingAccount(true);
-    Promise.all([fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}`).then(r => r.ok ? r.json() : null).catch(() => null), fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}/donations?limit=100&orderBy=createdDateUTC%20DESC`).then(r => r.ok ? r.json() : null).catch(() => null)]).then(([partRes, donRes]) => {
+    const bust = `_t=${Date.now()}`;
+    const fetchOpts = {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    };
+    Promise.all([fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}?${bust}`, fetchOpts).then(r => r.ok ? r.json() : null).catch(() => null), fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}/donations?limit=100&orderBy=createdDateUTC%20DESC&${bust}`, fetchOpts).then(r => r.ok ? r.json() : null).catch(() => null)]).then(([partRes, donRes]) => {
       if (isMounted) {
         setFetchedAccounts(prev => ({
           ...prev,

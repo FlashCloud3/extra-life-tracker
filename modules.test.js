@@ -689,5 +689,15 @@ describe('Modular Core Utilities & Config', () => {
       const content = fs.readFileSync('dashboard-panels.tsx', 'utf8');
       expect(content).toContain("(!d.displayName || d.displayName.trim().toLowerCase() === 'anonymous') ? t('anonymous')");
     });
+
+    test('hooks/use-extralife-data.js includes 24h marathon resilience (cache-busting, visibility listeners, watchdog)', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('hooks/use-extralife-data.js', 'utf8');
+      expect(content).toContain("cache: 'no-store'");
+      expect(content).toContain('_t=${Date.now()}');
+      expect(content).toContain("document.addEventListener('visibilitychange'");
+      expect(content).toContain("window.addEventListener('focus'");
+      expect(content).toContain('watchdog = setInterval(');
+    });
   });
 });

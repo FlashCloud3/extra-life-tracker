@@ -168,10 +168,13 @@ export function useExtraLifeData({
       let donData = [];
       let mileData = [];
 
+      const bust = `_t=${Date.now()}`;
+      const fetchOpts = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } };
+
       // 1. Participant Details (Use dd.extra-life.org for CORS support)
       if (pid) {
         try {
-          const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}`);
+          const partRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}?${bust}`, fetchOpts);
           if (partRes.ok) {
             partData = await partRes.json();
           }
@@ -180,7 +183,8 @@ export function useExtraLifeData({
         // 2. Donations (DonorDrive syntax requires orderBy=createdDateUTC%20DESC)
         try {
           const donRes = await fetch(
-            `https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC%20DESC`
+            `https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC%20DESC&${bust}`,
+            fetchOpts
           );
           if (donRes.ok) {
             const raw = await donRes.json();
@@ -194,7 +198,7 @@ export function useExtraLifeData({
 
         // 3. Milestones
         try {
-          const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones`);
+          const mileRes = await fetch(`https://dd.extra-life.org/api/participants/${pid}/milestones?${bust}`, fetchOpts);
           if (mileRes.ok) {
             const rawMileData = await mileRes.json();
             if (Array.isArray(rawMileData)) {
@@ -231,9 +235,9 @@ export function useExtraLifeData({
       if (targetTeamId) {
         try {
           const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
-            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}`)).catch(() => null),
-            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC%20DESC`)).catch(() => null),
-            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants`)).catch(() => null)
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}?${bust}`, fetchOpts)).catch(() => null),
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC%20DESC&${bust}`, fetchOpts)).catch(() => null),
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants?${bust}`, fetchOpts)).catch(() => null)
           ]);
           if (teamRes && teamRes.ok) {
             const tData = await teamRes.json();
@@ -337,7 +341,7 @@ export function useExtraLifeData({
     }
   }, [effectiveRate, fetchConversionRate, onAutoTeamDetected, onDataUpdated, onMilestoneCrossed, onNewDonation]);
 
-  // Periodic Polling
+  // Periodic Polling with Background Throttling Watchdog & Visibility Wakeup
   useEffect(() => {
     if (!isStandaloneMode && overlayType === 'none' && socketConnected) return;
     if (!config.participantId && !config.teamId) return;
@@ -345,16 +349,54 @@ export function useExtraLifeData({
     const refreshSeconds = Math.max(MIN_REFRESH_INTERVAL, Number(config.refreshInterval) || 60);
     const intervalMs = refreshSeconds * 1000;
 
-    const elapsed = Date.now() - lastFetchTimeRef.current;
-    if (lastFetchTimeRef.current === 0 || elapsed >= intervalMs) {
-      fetchClientSideData();
-    }
+    const checkAndFetch = () => {
+      const elapsed = Date.now() - lastFetchTimeRef.current;
+      if (lastFetchTimeRef.current === 0 || elapsed >= intervalMs) {
+        fetchClientSideData();
+      }
+    };
 
+    checkAndFetch();
+
+    // Primary polling timer
     const timer = setInterval(() => {
-      fetchClientSideData();
+      checkAndFetch();
     }, intervalMs);
 
-    return () => clearInterval(timer);
+    // Watchdog heartbeat: Every 15 seconds, check if the interval timer was delayed or throttled by browser power saving
+    const watchdog = setInterval(() => {
+      const elapsed = Date.now() - lastFetchTimeRef.current;
+      if (elapsed >= intervalMs) {
+        checkAndFetch();
+      }
+    }, 15000);
+
+    // Wake-up on tab visibility change or window focus (recovers instantly when user tabs back or browser un-throttles)
+    const onVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const elapsed = Date.now() - lastFetchTimeRef.current;
+        // If at least 30s has passed since last fetch or interval has elapsed, catch up immediately
+        if (elapsed >= 30000 || elapsed >= intervalMs) {
+          fetchClientSideData();
+        }
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityOrFocus);
+      window.addEventListener('focus', onVisibilityOrFocus);
+      window.addEventListener('online', onVisibilityOrFocus);
+    }
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(watchdog);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+        window.removeEventListener('focus', onVisibilityOrFocus);
+        window.removeEventListener('online', onVisibilityOrFocus);
+      }
+    };
   }, [
     isStandaloneMode,
     overlayType,

@@ -108,6 +108,7 @@ export const HeaderBar = ({
   effHighlightColor,
   hexToRgba,
   handleChangeId,
+  handleForceRefresh,
   dashboardView,
   setDashboardView,
   t,
@@ -172,25 +173,46 @@ export const HeaderBar = ({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: '1rem'
+      marginBottom: '1rem',
+      flexWrap: 'wrap',
+      gap: '10px'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       color: effSecondaryTextColor
     }
-  }, t('profile'), ": ", /*#__PURE__*/React.createElement("strong", null, currentProfile)), /*#__PURE__*/React.createElement("button", {
+  }, t('profile'), ": ", /*#__PURE__*/React.createElement("strong", null, currentProfile)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center'
+    }
+  }, handleForceRefresh && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: handleForceRefresh,
+    title: t('refreshNow'),
+    style: {
+      ...styles.button,
+      margin: 0,
+      padding: '5px 12px',
+      fontSize: '0.8rem',
+      backgroundColor: config.panelColor,
+      border: `1px solid ${effHighlightColor}`,
+      color: effHighlightColor
+    }
+  }, "🔄 ", t('refreshNow')), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: handleChangeId,
     style: {
       ...styles.button,
       margin: 0,
-      padding: '5px 15px',
+      padding: '5px 12px',
       fontSize: '0.8rem',
       backgroundColor: config.panelColor,
       border: `1px solid ${config.errorColor}`,
       color: config.errorColor
     }
-  }, t('changeId'))), /*#__PURE__*/React.createElement("div", {
+  }, t('changeId')))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '10px',

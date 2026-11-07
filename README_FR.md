@@ -172,6 +172,17 @@ public/
 
 ---
 
+## 🔋 Marathon de 24h : Maintenir la Page Toujours Active & Sans Veille
+
+Les navigateurs modernes mettent en veille les onglets en arrière-plan pour économiser la mémoire et la batterie :
+
+1. **Empêcher la mise en veille (Google Chrome) :** Rendez-vous sur `chrome://settings/performance` > sous **Économiseur de mémoire** > **Conserver ces sites toujours actifs** > cliquez sur **Ajouter** et entrez l'adresse de votre outil.
+2. **Empêcher la mise en veille (Microsoft Edge) :** Rendez-vous sur `edge://settings/system` > **Ne jamais mettre ces sites en veille** > cliquez sur **Ajouter** et entrez l'adresse de votre outil.
+3. **Autorisation audio :** Après avoir ouvert ou actualisé la page, cliquez au moins une fois n'importe où sur l'écran pour déverrouiller le moteur audio du navigateur afin que les alertes sonores fonctionnent sans interruption en arrière-plan.
+4. **Alternative recommandée (Dock OBS) :** Intégrez le tableau de bord directement dans OBS Studio (**Docks** > **Docks pour navigateur personnalisés...**). OBS ne met jamais ses sources en veille et autorise la lecture audio par défaut.
+
+---
+
 ## 🛠️ Structure du Projet
 
 - `index.tsx` : Point d'entrée principal, navigation par onglets, logique des requêtes API et synchronisation.

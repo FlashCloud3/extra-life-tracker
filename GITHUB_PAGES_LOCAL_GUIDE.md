@@ -169,6 +169,38 @@ By adding your dashboard as an **OBS Custom Browser Dock**, the dashboard runs w
 
 ---
 
+## 🔋 24-Hour Marathon: Keeping the Page Always Active & Unthrottled
+
+Modern web browsers (Google Chrome, Microsoft Edge, Opera, Firefox) feature aggressive **Memory Saver / Sleeping Tabs / Tab Discarding** to reduce RAM and battery usage. During a 24-hour stream event, an unfocused background tab could be put to sleep or have its timers throttled.
+
+Follow these quick steps to ensure your dashboard and alert sounds remain 100% active throughout your entire stream:
+
+### 1. Disable Tab Sleeping for the Tool (Chrome & Edge)
+* **Google Chrome:**
+  1. Open a new tab and go to `chrome://settings/performance`
+  2. Under **Memory Saver** > **Always keep these sites active**, click **Add**.
+  3. Enter your tool's URL (e.g. `https://<username>.github.io` or `localhost`).
+  4. Click **Add**. Chrome will never suspend or discard this tab.
+* **Microsoft Edge:**
+  1. Open a new tab and go to `edge://settings/system`
+  2. Under **Never put these sites to sleep**, click **Add**.
+  3. Enter your tool's URL and click **Add**.
+
+### 2. Browser Audio Autoplay Permissions
+Browsers prohibit tabs from playing sound until you have interacted with them at least once after loading:
+* **Rule:** When you open or refresh the dashboard page, **click anywhere on the screen at least once**.
+* This unlocks the browser's audio context, allowing incoming donation toasts and sound effects to play reliably in the background without focus.
+* **Alternative (Recommended):** Add your alert overlay directly as an **OBS Browser Source** (e.g. `?overlay=notifications&profile=YOUR_ID`). OBS Browser Sources never sleep and have autoplay permissions enabled by default.
+
+### 3. Built-In Resilience Features in the Web App
+The tracker includes built-in safeguards engineered specifically for 24-hour charity streams:
+* **Background Watchdog:** A 15-second heartbeat monitor checks the actual system clock (`Date.now()`). If the browser throttles JavaScript timers while you are gaming or in another window, the app immediately catches up.
+* **Instant Wake-up (`visibilitychange` & `focus`):** Tabbing back to the page or waking your PC triggers an instantaneous sync with DonorDrive.
+* **Anti-Cache Headers:** All DonorDrive requests include `cache: 'no-store'` and dynamic timestamp parameters (`&_t=...`) to prevent browser cache freezing.
+* **Manual "🔄 Refresh Now" Button:** Beside the profile ID in the top bar, you can click **"Refresh Now"** at any moment to force an immediate uncached poll.
+
+---
+
 ## ⚖️ Feature Comparison: Static (GitHub Pages) vs. Backend Mode
 
 | Feature | Static / GitHub Pages Mode (Local or Hosted) | Full-Stack Node Mode (`npm start`) |

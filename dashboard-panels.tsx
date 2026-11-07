@@ -88,6 +88,7 @@ export interface HeaderBarProps {
   effHighlightColor: string;
   hexToRgba: (hex: string, alpha: number) => string;
   handleChangeId: () => void;
+  handleForceRefresh?: () => void;
   dashboardView: 'participant' | 'team' | 'settings';
   setDashboardView: (view: 'participant' | 'team' | 'settings') => void;
   t: (key: string, vars?: any) => string;
@@ -108,6 +109,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   effHighlightColor,
   hexToRgba,
   handleChangeId,
+  handleForceRefresh,
   dashboardView,
   setDashboardView,
   t,
@@ -167,16 +169,28 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      {/* CURRENT PROFILE DISPLAY & CHANGE BUTTON */}
-      <div style={{ ...styles.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+      {/* CURRENT PROFILE DISPLAY & ACTION BUTTONS */}
+      <div style={{ ...styles.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
         <span style={{ color: effSecondaryTextColor }}>{t('profile')}: <strong>{currentProfile}</strong></span>
-        <button
-          type="button"
-          onClick={handleChangeId}
-          style={{ ...styles.button, margin: 0, padding: '5px 15px', fontSize: '0.8rem', backgroundColor: config.panelColor, border: `1px solid ${config.errorColor}`, color: config.errorColor }}
-        >
-          {t('changeId')}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {handleForceRefresh && (
+            <button
+              type="button"
+              onClick={handleForceRefresh}
+              title={t('refreshNow')}
+              style={{ ...styles.button, margin: 0, padding: '5px 12px', fontSize: '0.8rem', backgroundColor: config.panelColor, border: `1px solid ${effHighlightColor}`, color: effHighlightColor }}
+            >
+              🔄 {t('refreshNow')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleChangeId}
+            style={{ ...styles.button, margin: 0, padding: '5px 12px', fontSize: '0.8rem', backgroundColor: config.panelColor, border: `1px solid ${config.errorColor}`, color: config.errorColor }}
+          >
+            {t('changeId')}
+          </button>
+        </div>
       </div>
 
       {/* VIEW MODE TOGGLE (PARTICIPANT vs TEAM DASHBOARD vs SETTINGS) */}
