@@ -40,7 +40,12 @@ export function useExtraLifeData({
     initialData.lastFetchedAt ? new Date(initialData.lastFetchedAt) : null
   );
 
-  const seenDonationIdsRef = useRef(new Set());
+  const seenDonationIdsRef = useRef(new Set(
+    Array.isArray(initialData.donations) ? initialData.donations.map(d => d.donationID).filter(Boolean) : []
+  ));
+  const isFirstFetchRef = useRef(
+    !Array.isArray(initialData.donations) || initialData.donations.length === 0
+  );
   const lastFetchTimeRef = useRef(0);
   const isFetchingRef = useRef(false);
 
@@ -172,13 +177,18 @@ export function useExtraLifeData({
           }
         } catch (e) {}
 
-        // 2. Donations
+        // 2. Donations (DonorDrive syntax requires orderBy=createdDateUTC%20DESC)
         try {
           const donRes = await fetch(
-            `https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`
+            `https://dd.extra-life.org/api/participants/${pid}/donations?limit=100&orderBy=createdDateUTC%20DESC`
           );
           if (donRes.ok) {
-            donData = await donRes.json();
+            const raw = await donRes.json();
+            if (Array.isArray(raw)) {
+              donData = [...raw].sort(
+                (a, b) => new Date(b.createdDateUTC).getTime() - new Date(a.createdDateUTC).getTime()
+              );
+            }
           }
         } catch (e) {}
 
@@ -222,7 +232,7 @@ export function useExtraLifeData({
         try {
           const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
             Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}`)).catch(() => null),
-            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`)).catch(() => null),
+            Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/donations?limit=100&orderBy=createdDateUTC%20DESC`)).catch(() => null),
             Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${targetTeamId}/participants`)).catch(() => null)
           ]);
           if (teamRes && teamRes.ok) {
@@ -233,7 +243,9 @@ export function useExtraLifeData({
           }
           if (teamDonRes && teamDonRes.ok) {
             const tDon = await teamDonRes.json();
-            tDonations = Array.isArray(tDon) ? tDon : [];
+            tDonations = Array.isArray(tDon)
+              ? [...tDon].sort((a, b) => new Date(b.createdDateUTC).getTime() - new Date(a.createdDateUTC).getTime())
+              : [];
           }
           if (teamPartRes && teamPartRes.ok) {
             const tPart = await teamPartRes.json();
@@ -249,7 +261,7 @@ export function useExtraLifeData({
       }
 
       // Identify new donations
-      const isFirstFetch = seenDonationIdsRef.current.size === 0;
+      const isFirstFetch = isFirstFetchRef.current;
       const newDonations = [];
       donData.forEach((d) => {
         if (!seenDonationIdsRef.current.has(d.donationID)) {
@@ -259,6 +271,7 @@ export function useExtraLifeData({
           }
         }
       });
+      isFirstFetchRef.current = false;
 
       const newRaised = partData ? (partData.sumDonations || 0) : totalRaisedRef.current;
       const newGoal = partData ? (partData.fundraisingGoal || 0) : 0;

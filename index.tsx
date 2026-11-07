@@ -1159,7 +1159,7 @@ const App = () => {
         <div style={styles.toastContainer} aria-live="assertive">
             {activeToasts.map(toast => (
             <div key={toast.donationID} style={styles.toast} role="alert">
-                <div style={styles.toastName}>{toast.displayName === 'Anonymous' ? t('anonymous') : toast.displayName}</div>
+                <div style={styles.toastName}>{(!toast.displayName || toast.displayName.trim().toLowerCase() === 'anonymous') ? t('anonymous') : toast.displayName}</div>
                 <div style={styles.toastAmount}>{t('donated')} {currencyPrefix}{convertAmount(toast.amount).toFixed(2)}!</div>
                 {toast.message && <div style={styles.toastMessage}>"{toast.message}"</div>}
             </div>

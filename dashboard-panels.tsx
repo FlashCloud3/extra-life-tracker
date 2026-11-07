@@ -320,7 +320,7 @@ export const DonationsFeedCard: React.FC<DonationsFeedCardProps> = ({
         {sortedDonations.map(d => (
           <div key={d.donationID} style={styles.donationItem}>
             <div style={styles.donationHeader}>
-              <span style={styles.donationName}>{d.displayName === 'Anonymous' ? t('anonymous') : d.displayName}</span>
+              <span style={styles.donationName}>{(!d.displayName || d.displayName.trim().toLowerCase() === 'anonymous') ? t('anonymous') : d.displayName}</span>
               <span style={styles.donationAmount}>{currencyPrefix}{convertAmount(d.amount).toFixed(2)}</span>
             </div>
             {d.message && <div style={styles.donationMessage}>{d.message}</div>}
@@ -413,7 +413,7 @@ export const SecondaryStatsCard: React.FC<SecondaryStatsCardProps> = ({
         {t('teamRaised')}: {currencyPrefix}{convertAmount(teamTotalRaised).toFixed(2)}
       </p>
       <p style={{ margin: 0, color: effSecondaryTextColor, fontSize: '0.85rem', marginTop: '5px' }}>
-        {t('lastDonator')}: {sortedDonations.length > 0 ? (sortedDonations[0].displayName === 'Anonymous' ? t('anonymous') : sortedDonations[0].displayName) : t('none')}
+        {t('lastDonator')}: {sortedDonations.length > 0 ? ((!sortedDonations[0].displayName || sortedDonations[0].displayName.trim().toLowerCase() === 'anonymous') ? t('anonymous') : sortedDonations[0].displayName) : t('none')}
       </p>
     </div>
   );
@@ -2871,7 +2871,11 @@ export const SponsorsSection: React.FC<SponsorsSectionProps> = ({
         {config.sponsors.map(sponsor => (
           <div key={sponsor.id} style={{ ...styles.soundItem, height: 'auto', alignItems: 'center' }}>
             <div style={{ width: '50px', height: '50px', marginRight: '15px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
-              <img src={sponsor.imageUrl} alt={sponsor.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              <img
+                src={sponsor.imageUrl?.startsWith('/sponsors/') ? sponsor.imageUrl.replace(/^\/+/, '') : sponsor.imageUrl}
+                alt={sponsor.name}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+              />
             </div>
             <span style={{ flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sponsor.name}</span>
             <button type="button" onClick={() => handleDeleteSponsor(sponsor.id)} style={{ ...styles.soundButton, backgroundColor: config.errorColor }}>{t('delete')}</button>

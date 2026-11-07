@@ -330,7 +330,7 @@ export const DonationsFeedCard = ({
     style: styles.donationHeader
   }, /*#__PURE__*/React.createElement("span", {
     style: styles.donationName
-  }, d.displayName === 'Anonymous' ? t('anonymous') : d.displayName), /*#__PURE__*/React.createElement("span", {
+  }, !d.displayName || d.displayName.trim().toLowerCase() === 'anonymous' ? t('anonymous') : d.displayName), /*#__PURE__*/React.createElement("span", {
     style: styles.donationAmount
   }, currencyPrefix, convertAmount(d.amount).toFixed(2))), d.message && /*#__PURE__*/React.createElement("div", {
     style: styles.donationMessage
@@ -432,7 +432,7 @@ export const SecondaryStatsCard = ({
       fontSize: '0.85rem',
       marginTop: '5px'
     }
-  }, t('lastDonator'), ": ", sortedDonations.length > 0 ? sortedDonations[0].displayName === 'Anonymous' ? t('anonymous') : sortedDonations[0].displayName : t('none')));
+  }, t('lastDonator'), ": ", sortedDonations.length > 0 ? !sortedDonations[0].displayName || sortedDonations[0].displayName.trim().toLowerCase() === 'anonymous' ? t('anonymous') : sortedDonations[0].displayName : t('none')));
 };
 
 // ==========================================
@@ -3796,7 +3796,7 @@ export const SponsorsSection = ({
       backgroundColor: '#000'
     }
   }, /*#__PURE__*/React.createElement("img", {
-    src: sponsor.imageUrl,
+    src: sponsor.imageUrl?.startsWith('/sponsors/') ? sponsor.imageUrl.replace(/^\/+/, '') : sponsor.imageUrl,
     alt: sponsor.name,
     style: {
       maxWidth: '100%',

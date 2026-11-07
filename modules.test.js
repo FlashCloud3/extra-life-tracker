@@ -671,5 +671,23 @@ describe('Modular Core Utilities & Config', () => {
       expect(content).toContain("`sounds/${targetUrl}`");
       expect(content).not.toContain("`/sounds/${urlOrFilename}`");
     });
+
+    test('hooks/use-extralife-data.js queries DonorDrive with valid orderBy and client-side sorting', async () => {
+      const fs = await import('fs');
+      const content = fs.readFileSync('hooks/use-extralife-data.js', 'utf8');
+      expect(content).toContain('orderBy=createdDateUTC%20DESC');
+      expect(content).not.toContain('orderDirection=DESC');
+      expect(content).toContain('seenDonationIdsRef = useRef(new Set(');
+    });
+
+    test('translations.js defines Anonymous Donor and dashboard-panels.tsx displays it when displayName is missing or empty', async () => {
+      const { translations } = await import('./translations.js');
+      expect(translations.en.anonymous).toBe('Anonymous Donor');
+      expect(translations.fr.anonymous).toBe('Donateur Anonyme');
+
+      const fs = await import('fs');
+      const content = fs.readFileSync('dashboard-panels.tsx', 'utf8');
+      expect(content).toContain("(!d.displayName || d.displayName.trim().toLowerCase() === 'anonymous') ? t('anonymous')");
+    });
   });
 });

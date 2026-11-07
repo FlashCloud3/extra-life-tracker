@@ -1710,7 +1710,7 @@ const TeamDashboardView: React.FC<TeamDashboardViewProps> = ({
 
     Promise.all([
       fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`).then(r => r.ok ? r.json() : null).catch(() => null)
+      fetch(`https://dd.extra-life.org/api/participants/${activeAccountId}/donations?limit=100&orderBy=createdDateUTC%20DESC`).then(r => r.ok ? r.json() : null).catch(() => null)
     ]).then(([partRes, donRes]) => {
       if (isMounted) {
         setFetchedAccounts(prev => ({
@@ -2518,6 +2518,9 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
     }
 
     const currentSponsor = sponsors[index];
+    const sponsorSrc = (currentSponsor.imageUrl && currentSponsor.imageUrl.startsWith('/sponsors/'))
+        ? currentSponsor.imageUrl.replace(/^\/+/, '')
+        : currentSponsor.imageUrl;
 
     return (
         <div style={{
@@ -2537,7 +2540,7 @@ const SponsorOverlay = ({ sponsors, styles, animationDuration = 5, t }: any) => 
         }}>
              <img 
                 key={currentSponsor.id} 
-                src={currentSponsor.imageUrl} 
+                src={sponsorSrc} 
                 alt={currentSponsor.name} 
                 style={{
                     width: '100%',
@@ -2564,20 +2567,39 @@ const TextOverlay = ({ filename, customText, styles, fontFamily, textColor, acce
             return;
         }
 
-        const fetchText = () => {
-            const url = (filename.startsWith('http://') || filename.startsWith('https://'))
-                ? filename
-                : `/api/read-text/${filename}`;
-            fetch(url)
-                .then(res => {
-                    if (res.ok) return res.text();
-                    throw new Error('Failed to read file');
-                })
-                .then(text => setContent(text))
-                .catch(err => {
-                    console.error(err);
-                    setContent(t ? t('errorLoadingFile', { filename }) : `Error loading ${filename}`);
-                });
+        const fetchText = async () => {
+            if (filename.startsWith('http://') || filename.startsWith('https://')) {
+                try {
+                    const res = await fetch(filename);
+                    if (res.ok) {
+                        const text = await res.text();
+                        setContent(text);
+                        return;
+                    }
+                } catch (e) {}
+            } else {
+                // Try server API first
+                try {
+                    const res = await fetch(`/api/read-text/${filename}`);
+                    if (res.ok) {
+                        const text = await res.text();
+                        setContent(text);
+                        return;
+                    }
+                } catch (e) {}
+
+                // Fallback to static text_files/ path for GitHub Pages
+                try {
+                    const clean = filename.replace(/^\.?\/?text_files\//, '');
+                    const res = await fetch(`text_files/${clean}`);
+                    if (res.ok) {
+                        const text = await res.text();
+                        setContent(text);
+                        return;
+                    }
+                } catch (e) {}
+            }
+            setContent(t ? t('errorLoadingFile', { filename }) : `Error loading ${filename}`);
         };
 
         fetchText();

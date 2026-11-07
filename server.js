@@ -643,11 +643,14 @@ export async function fetchProfileData(profile) {
                 profile.data.goal = newGoal;
                 profile.data.participantName = userJson.displayName || '';
 
-                // 2. Donations
+                // 2. Donations (DonorDrive syntax requires orderBy=createdDateUTC%20DESC)
                 try {
-                    const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`);
+                    const donationsRes = await fetch(`https://dd.extra-life.org/api/participants/${profile.config.participantId}/donations?limit=100&orderBy=createdDateUTC%20DESC`);
                     if (donationsRes && (donationsRes.ok || typeof donationsRes.ok === 'undefined')) {
-                        const donationsJson = await donationsRes.json();
+                        const rawJson = await donationsRes.json();
+                        const donationsJson = Array.isArray(rawJson)
+                            ? [...rawJson].sort((a, b) => new Date(b.createdDateUTC).getTime() - new Date(a.createdDateUTC).getTime())
+                            : [];
                         if (Array.isArray(donationsJson)) {
                             for (const d of donationsJson) {
                                 const id = d.donationID;
@@ -729,7 +732,7 @@ export async function fetchProfileData(profile) {
              try {
                  const [teamRes, teamDonRes, teamPartRes] = await Promise.all([
                      Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}`)).catch(e => null),
-                     Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/donations?limit=100&orderBy=createdDateUTC&orderDirection=DESC`)).catch(e => null),
+                     Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/donations?limit=100&orderBy=createdDateUTC%20DESC`)).catch(e => null),
                      Promise.resolve().then(() => fetch(`https://dd.extra-life.org/api/teams/${currentTeamId}/participants`)).catch(e => null)
                  ]);
                  if (teamRes && teamRes.ok) {
