@@ -14,7 +14,7 @@ import {
   stopAudioSources
 } from '../audio-utils.js';
 
-export function useAudioAlerts({ config }) {
+export function useAudioAlerts({ config, isDashboardMode = false }) {
   const [activeToasts, setActiveToasts] = useState([]);
   const [toastQueue, setToastQueue] = useState([]);
   const [celebrationKey, setCelebrationKey] = useState(0);
@@ -22,10 +22,15 @@ export function useAudioAlerts({ config }) {
   const audioCtxRef = useRef(null);
   const activeSourcesRef = useRef(new Set());
   const configRef = useRef(config);
+  const isDashboardModeRef = useRef(isDashboardMode);
 
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  useEffect(() => {
+    isDashboardModeRef.current = isDashboardMode;
+  }, [isDashboardMode]);
 
   // Audio Context unlocker (handles browser autoplay policies)
   useEffect(() => {
@@ -55,6 +60,7 @@ export function useAudioAlerts({ config }) {
   const playSpecificSound = useCallback(async (soundId) => {
     const currentConfig = configRef.current;
     if (!currentConfig.isSoundEnabled) return;
+    if (isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();

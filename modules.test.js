@@ -699,5 +699,21 @@ describe('Modular Core Utilities & Config', () => {
       expect(content).toContain("window.addEventListener('focus'");
       expect(content).toContain('watchdog = setInterval(');
     });
+
+    test('muteDashboardAudio prevents duplicate audio playback in dashboard while allowing overlay playback', async () => {
+      const { DEFAULT_CONFIG } = await import('./constants.js');
+      expect(DEFAULT_CONFIG.muteDashboardAudio).toBe(false);
+
+      const { translations } = await import('./translations.js');
+      expect(translations.en.muteDashboardAudio).toBeDefined();
+      expect(translations.fr.muteDashboardAudio).toBeDefined();
+
+      const fs = await import('fs');
+      const hookContent = fs.readFileSync('hooks/use-audio-alerts.js', 'utf8');
+      expect(hookContent).toContain('if (isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;');
+
+      const panelContent = fs.readFileSync('dashboard-panels.tsx', 'utf8');
+      expect(panelContent).toContain('muteDashboardAudio');
+    });
   });
 });

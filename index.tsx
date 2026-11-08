@@ -364,7 +364,7 @@ const App = () => {
     triggerDonationToast,
     triggerCelebration,
     clearAlerts
-  } = useAudioAlerts({ config });
+  } = useAudioAlerts({ config, isDashboardMode: overlayType === 'none' });
 
   // Hook 2: useBroadcastSync
   const {

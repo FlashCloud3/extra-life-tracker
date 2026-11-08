@@ -358,6 +358,7 @@ const DEFAULT_CONFIG = {
     notificationAnimation: 'slide',
     
     isSoundEnabled: true,
+    muteDashboardAudio: false,
     notificationVolume: 0.5,
     selectedSound: 'default',
     selectedMilestoneSound: 'default-milestone',

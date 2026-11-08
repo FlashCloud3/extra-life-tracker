@@ -3540,17 +3540,63 @@ export const SoundSettingsSection = ({
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "checkbox",
+    id: "sound-enabled-checkbox",
     checked: config.isSoundEnabled,
     onChange: e => updateConfig({
       isSoundEnabled: e.target.checked
     })
   }), /*#__PURE__*/React.createElement("label", {
+    htmlFor: "sound-enabled-checkbox",
     style: {
       ...styles.label,
       opacity: 1,
-      cursor: 'pointer'
+      cursor: 'pointer',
+      margin: 0
     }
-  }, t('enableSound'))), /*#__PURE__*/React.createElement("label", {
+  }, t('enableSound'))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+      marginTop: '10px',
+      marginBottom: '10px',
+      padding: '10px',
+      backgroundColor: 'rgba(0,0,0,0.2)',
+      borderRadius: '6px',
+      border: '1px solid rgba(255,255,255,0.08)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    id: "mute-dashboard-audio-checkbox",
+    checked: !!config.muteDashboardAudio,
+    onChange: e => updateConfig({
+      muteDashboardAudio: e.target.checked
+    }),
+    disabled: !config.isSoundEnabled
+  }), /*#__PURE__*/React.createElement("label", {
+    htmlFor: "mute-dashboard-audio-checkbox",
+    style: {
+      ...styles.label,
+      opacity: config.isSoundEnabled ? 1 : 0.5,
+      cursor: config.isSoundEnabled ? 'pointer' : 'default',
+      margin: 0,
+      fontWeight: 'bold'
+    }
+  }, "🔇 ", t('muteDashboardAudio'))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '4px 0 0 26px',
+      fontSize: '0.8rem',
+      opacity: 0.7,
+      color: config.textColor,
+      lineHeight: 1.4
+    }
+  }, t('muteDashboardAudioDesc'))), /*#__PURE__*/React.createElement("label", {
     style: config.isSoundEnabled ? styles.label : {
       ...styles.label,
       opacity: 0.5
