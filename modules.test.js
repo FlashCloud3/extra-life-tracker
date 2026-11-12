@@ -710,10 +710,39 @@ describe('Modular Core Utilities & Config', () => {
 
       const fs = await import('fs');
       const hookContent = fs.readFileSync('hooks/use-audio-alerts.js', 'utf8');
-      expect(hookContent).toContain('if (isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;');
+      expect(hookContent).toContain('if (!forcePlay && isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;');
+      expect(hookContent).toContain('s.id === soundId || s.name === soundId || s.data === soundId');
 
       const panelContent = fs.readFileSync('dashboard-panels.tsx', 'utf8');
-      expect(panelContent).toContain('muteDashboardAudio');
+      expect(panelContent).toContain('playSpecificSound(config.selectedSound, true)');
+      expect(panelContent).toContain('playSpecificSound(config.selectedMilestoneSound, true)');
+    });
+
+    test('ProgressBar overlay styling matches NextMilestoneOverlay and theme color preview', async () => {
+      const fs = await import('fs');
+      const overlaysContent = fs.readFileSync('overlays.tsx', 'utf8');
+      expect(overlaysContent).toContain('export const ProgressBar');
+      expect(overlaysContent).toContain('effProgressBarColor');
+      expect(overlaysContent).toContain('effProgressBarBgColor');
+      expect(overlaysContent).toContain('effProgressBarTextColor');
+      expect(overlaysContent).toContain('effProgressBarBorderColor');
+      expect(overlaysContent).toContain('height: \'42px\'');
+      expect(overlaysContent).toContain('centerText');
+      expect(overlaysContent).toContain('justifyContent: \'center\'');
+      expect(overlaysContent).toContain('⏱ {timeDisplay}');
+      const progressBarBlock = overlaysContent.slice(
+        overlaysContent.indexOf('export const ProgressBar'),
+        overlaysContent.indexOf('const NextMilestoneOverlay')
+      );
+      expect(progressBarBlock).not.toContain('campaignGoal');
+
+      const indexContent = fs.readFileSync('index.tsx', 'utf8');
+      expect(indexContent).toContain('effProgressBarColor={effProgressBarColor}');
+      expect(indexContent).toContain('effProgressBarBgColor={effProgressBarBgColor}');
+      expect(indexContent).toContain('effProgressBarTextColor={effProgressBarTextColor}');
+      expect(indexContent).toContain('effProgressBarBorderColor={effProgressBarBorderColor}');
+      expect(indexContent).toContain('effSecondaryTextColor={effSecondaryTextColor}');
     });
   });
 });
+

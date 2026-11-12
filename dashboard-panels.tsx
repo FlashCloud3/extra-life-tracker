@@ -2677,7 +2677,7 @@ export interface SoundSettingsSectionProps {
   styles: any;
   config: any;
   updateConfig: (updates: any) => void;
-  playSpecificSound: (soundId: string) => void;
+  playSpecificSound: (soundId: string, forcePlay?: boolean) => void;
   handleDeleteSound: (id: string) => void;
   handleAddSound: (e: React.ChangeEvent<HTMLInputElement>) => void;
   selectedSoundFile: string;
@@ -2764,7 +2764,7 @@ export const SoundSettingsSection: React.FC<SoundSettingsSectionProps> = ({
             <option key={sound.id} value={sound.id}>{sound.name}</option>
           ))}
         </select>
-        <button type="button" onClick={() => playSpecificSound(config.selectedSound)} disabled={!config.isSoundEnabled} style={styles.previewButton}>{t('preview')}</button>
+        <button type="button" onClick={() => playSpecificSound(config.selectedSound, true)} disabled={!config.isSoundEnabled} style={styles.previewButton}>{t('preview')}</button>
       </div>
 
       <label style={styles.label}>{t('milestoneSound')}</label>
@@ -2780,7 +2780,7 @@ export const SoundSettingsSection: React.FC<SoundSettingsSectionProps> = ({
             <option key={sound.id} value={sound.id}>{sound.name}</option>
           ))}
         </select>
-        <button type="button" onClick={() => playSpecificSound(config.selectedMilestoneSound)} disabled={!config.isSoundEnabled} style={styles.previewButton}>{t('preview')}</button>
+        <button type="button" onClick={() => playSpecificSound(config.selectedMilestoneSound, true)} disabled={!config.isSoundEnabled} style={styles.previewButton}>{t('preview')}</button>
       </div>
 
       <div style={{ borderTop: `2px dashed ${effDividerColor}`, margin: '20px 0 0 0' }} />
@@ -2791,7 +2791,7 @@ export const SoundSettingsSection: React.FC<SoundSettingsSectionProps> = ({
           <div key={sound.id} style={styles.soundItem}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '10px' }}>{sound.name}</span>
             <div style={{ flexShrink: 0 }}>
-              <button type="button" onClick={() => playSpecificSound(sound.id)} style={styles.soundButton}>{t('preview')}</button>
+              <button type="button" onClick={() => playSpecificSound(sound.id, true)} style={styles.soundButton}>{t('preview')}</button>
               <button type="button" onClick={() => handleDeleteSound(sound.id)} style={{ ...styles.soundButton, backgroundColor: config.errorColor }}>{t('delete')}</button>
             </div>
           </div>

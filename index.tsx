@@ -1685,8 +1685,15 @@ const App = () => {
                     progressPercentage={progressPercentage}
                     currencyPrefix={currencyPrefix}
                     convertAmount={convertAmount}
+                    participantName={participantName}
                     styles={styles}
                     config={config}
+                    effProgressBarColor={effProgressBarColor}
+                    effProgressBarBgColor={effProgressBarBgColor}
+                    effProgressBarTextColor={effProgressBarTextColor}
+                    effProgressBarBorderColor={effProgressBarBorderColor}
+                    effSecondaryTextColor={effSecondaryTextColor}
+                    hexToRgba={hexToRgba}
                     t={t}
                 />
             )}

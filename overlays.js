@@ -13,39 +13,131 @@ export const ProgressBar = ({
   goal,
   timeDisplay,
   progressPercentage,
-  currencyPrefix,
-  convertAmount,
-  styles,
+  currencyPrefix = '$',
+  convertAmount = amt => amt,
+  participantName,
+  styles = {},
   config,
+  effProgressBarColor,
+  effProgressBarBgColor,
+  effProgressBarTextColor,
+  effProgressBarBorderColor,
+  effSecondaryTextColor,
+  hexToRgba: hexToRgbaProp,
   t
 }) => {
+  const resolvedHexToRgba = hexToRgbaProp || hexToRgba || ((hex, alpha) => hex);
+  const barBg = effProgressBarBgColor || config?.progressBarBgColor || config?.panelColor || '#1a1a1a';
+  const barColor = effProgressBarColor || config?.progressBarColor || config?.accentColor1 || config?.successColor || '#00ff00';
+  const barTextColor = effProgressBarTextColor || config?.progressBarTextColor || config?.textColor || '#ffffff';
+  const borderColor = effProgressBarBorderColor || config?.progressBarBorderColor || config?.panelBorderColor || '#00ffff';
+  const secTextColor = effSecondaryTextColor || config?.secondaryTextColor || '#aaaaaa';
+  const numRaised = typeof totalRaised === 'number' && !isNaN(totalRaised) ? totalRaised : parseFloat(String(totalRaised || '0').replace(/[^0-9.-]/g, '')) || 0;
+  const targetGoal = typeof goal === 'number' && !isNaN(goal) ? goal : parseFloat(String(goal || '0').replace(/[^0-9.-]/g, '')) || 0;
+  const calculatedPct = targetGoal > 0 ? numRaised / targetGoal * 100 : 0;
+  const pct = typeof progressPercentage === 'number' && !isNaN(progressPercentage) ? progressPercentage : calculatedPct;
+  const activePercentage = Math.min(100, Math.max(0, pct));
+  const remaining = Math.max(0, targetGoal - numRaised);
+  const centerText = `${currencyPrefix}${convertAmount(numRaised).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })} / ${currencyPrefix}${convertAmount(targetGoal).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })} (${pct.toFixed(1)}%)`;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: "2rem"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...styles.progressBarContainer,
+      ...(styles?.progressBarContainer || {}),
+      backgroundColor: barBg,
+      border: `4px solid ${borderColor}`,
+      boxSizing: 'border-box',
       marginBottom: 0
     }
   }, timeDisplay && /*#__PURE__*/React.createElement("div", {
-    style: styles.timerText
-  }, timeDisplay), /*#__PURE__*/React.createElement("div", {
     style: {
-      ...styles.progressBar,
-      width: `${progressPercentage}%`
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      textAlign: 'center',
+      width: '100%',
+      marginBottom: '10px',
+      color: secTextColor,
+      fontSize: '1.1rem',
+      fontFamily: config?.fontFamily || styles?.progressBarContainer?.fontFamily,
+      textShadow: `1px 1px ${config?.backgroundColor || '#000000'}`,
+      ...(styles?.timerText || {}),
+      margin: '0 0 10px 0'
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: styles.progressText
-  }, currencyPrefix, convertAmount(totalRaised).toLocaleString("en-US", {
+  }, "⏱ ", timeDisplay), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      width: '100%',
+      height: '42px',
+      backgroundColor: barBg,
+      border: `2px solid ${resolvedHexToRgba(borderColor, 0.4)}`,
+      overflow: 'hidden',
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: '100%',
+      width: `${activePercentage}%`,
+      backgroundColor: barColor,
+      transition: 'width 0.5s ease-in-out'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: barTextColor,
+      fontFamily: config?.fontFamily || styles?.progressBarContainer?.fontFamily,
+      fontSize: '1.15rem',
+      fontWeight: 'bold',
+      textShadow: `1px 1px 2px ${resolvedHexToRgba(config?.backgroundColor || '#000000', 0.85)}`,
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap',
+      padding: '0 10px',
+      boxSizing: 'border-box'
+    }
+  }, centerText)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: '10px',
+      color: secTextColor,
+      fontSize: '0.95rem',
+      fontFamily: config?.fontFamily || styles?.progressBarContainer?.fontFamily,
+      flexWrap: 'wrap',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, t ? t('goal') : 'Goal', ": ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: config?.textColor || '#ffffff',
+      fontWeight: 'bold'
+    }
+  }, currencyPrefix, convertAmount(targetGoal).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: styles.goalText
-  }, t("goal"), ": ", currencyPrefix, convertAmount(goal).toLocaleString("en-US", {
+  }))), remaining > 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      opacity: 0.85
+    }
+  }, currencyPrefix, convertAmount(remaining).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }))));
+  }), " ", t ? t('toGo') : 'to go') : /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: config?.successColor || '#00ff00',
+      fontWeight: 'bold'
+    }
+  }, "🎉 ", t ? t('goalReached') || 'Goal Reached!' : 'Goal Reached!')));
 };
 
 // === OVERLAY & UI COMPONENTS (defined outside App for stability) ===

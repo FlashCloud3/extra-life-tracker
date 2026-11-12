@@ -3644,7 +3644,7 @@ export const SoundSettingsSection = ({
     value: sound.id
   }, sound.name))), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => playSpecificSound(config.selectedSound),
+    onClick: () => playSpecificSound(config.selectedSound, true),
     disabled: !config.isSoundEnabled,
     style: styles.previewButton
   }, t('preview'))), /*#__PURE__*/React.createElement("label", {
@@ -3676,7 +3676,7 @@ export const SoundSettingsSection = ({
     value: sound.id
   }, sound.name))), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => playSpecificSound(config.selectedMilestoneSound),
+    onClick: () => playSpecificSound(config.selectedMilestoneSound, true),
     disabled: !config.isSoundEnabled,
     style: styles.previewButton
   }, t('preview'))), /*#__PURE__*/React.createElement("div", {
@@ -3712,7 +3712,7 @@ export const SoundSettingsSection = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => playSpecificSound(sound.id),
+    onClick: () => playSpecificSound(sound.id, true),
     style: styles.soundButton
   }, t('preview')), /*#__PURE__*/React.createElement("button", {
     type: "button",

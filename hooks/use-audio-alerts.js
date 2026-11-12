@@ -57,10 +57,10 @@ export function useAudioAlerts({ config, isDashboardMode = false }) {
     stopAudioSources(activeSourcesRef.current);
   }, []);
 
-  const playSpecificSound = useCallback(async (soundId) => {
+  const playSpecificSound = useCallback(async (soundId, forcePlay = false) => {
     const currentConfig = configRef.current;
     if (!currentConfig.isSoundEnabled) return;
-    if (isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;
+    if (!forcePlay && isDashboardModeRef.current && currentConfig.muteDashboardAudio) return;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -81,11 +81,12 @@ export function useAudioAlerts({ config, isDashboardMode = false }) {
     const wasSynthesized = playSynthesizedSound(ctx, masterGain, soundId, startTime, activeSourcesRef.current);
     if (wasSynthesized) return;
 
-    // Custom sound file from memory or server
-    const sound = currentConfig.customSounds?.find(s => s.id === soundId);
-    if (!sound) return;
+    // Custom sound file from memory or server list
+    const sound = currentConfig.customSounds?.find(s => s.id === soundId || s.name === soundId || s.data === soundId);
+    let soundUrl = sound ? sound.data : soundId;
 
-    let soundUrl = sound.data;
+    if (!soundUrl) return;
+
     if (!soundUrl.startsWith('data:') && !soundUrl.startsWith('http://') && !soundUrl.startsWith('https://')) {
       soundUrl = soundUrl.replace(/^\.?\/?sounds\//, '');
       soundUrl = `sounds/${soundUrl}`;
