@@ -413,7 +413,11 @@ class Profile {
 const profiles = new Map();
 
 // Helper to get or initialize a profile
-async function getOrCreateProfile(profileId) {
+async function getOrCreateProfile(rawProfileId) {
+    let profileId = typeof rawProfileId === 'string' && rawProfileId.trim() ? rawProfileId.trim() : 'default';
+    if (profileId.includes('[object') || profileId === 'null' || profileId === 'undefined') {
+        profileId = 'default';
+    }
     if (!profiles.has(profileId)) {
         console.log(`Initializing profile: ${profileId}`);
         const newProfile = new Profile(profileId);

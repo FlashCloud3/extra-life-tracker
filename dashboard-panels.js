@@ -1895,7 +1895,7 @@ export const TwitchSection = ({
     }
   }), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: handleGetTwitchToken,
+    onClick: () => handleGetTwitchToken(),
     style: {
       ...styles.button,
       backgroundColor: effPrimaryButtonBgColor,

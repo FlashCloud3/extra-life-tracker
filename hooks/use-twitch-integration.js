@@ -50,24 +50,34 @@ export function useTwitchIntegration({
     if (hash.includes('access_token')) {
       const params = new URLSearchParams(hash.substring(1));
       const token = params.get('access_token');
-      const state = params.get('state');
+      let state = params.get('state');
 
       if (token) {
         const fullToken = `oauth:${token}`;
         setPendingTwitchToken(fullToken);
 
         const urlParams = new URLSearchParams(window.location.search);
-        const urlProfile = urlParams.get('profile');
+        let urlProfile = urlParams.get('profile');
 
-        // If state matches another profile and we are not currently on that profile, switch to it
-        if (state && state !== 'default' && state !== urlProfile) {
-          const newUrl = `${window.location.pathname}?profile=${encodeURIComponent(state)}${hash}`;
-          window.location.href = newUrl;
-          return;
+        // Sanitize state: reject [object Object] or invalid values
+        if (state && (state.includes('[object') || state === 'null' || state === 'undefined')) {
+          state = null;
         }
 
-        // Clean the hash from the address bar
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        // If the URL search had a corrupted profile, clean it out
+        if (urlProfile && (urlProfile.includes('[object') || urlProfile === 'null' || urlProfile === 'undefined')) {
+          urlParams.delete('profile');
+          urlProfile = null;
+        }
+
+        // If state matches a valid custom profile and we are not currently on that profile, preserve it
+        if (state && state !== 'default' && state !== urlProfile) {
+          urlParams.set('profile', state);
+        }
+
+        // Clean the hash (and sanitize search params) from the address bar without page reload
+        const cleanSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
+        window.history.replaceState(null, '', window.location.pathname + cleanSearch);
       }
     }
   }, []);
@@ -316,11 +326,24 @@ export function useTwitchIntegration({
     setReconnectTrigger(prev => prev + 1);
   }, []);
 
-  const handleGetTwitchToken = useCallback((currentProfile = 'default') => {
+  const handleGetTwitchToken = useCallback((profileArg) => {
     if (typeof window === 'undefined') return;
     const redirectUri = `${window.location.origin}${window.location.pathname}`;
     const scopes = 'chat:read+chat:edit';
-    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scopes}&state=${encodeURIComponent(currentProfile)}`;
+
+    // Safely resolve active profile name, ignoring any passed Event objects
+    let profileName = 'default';
+    if (typeof profileArg === 'string' && profileArg.trim() && !profileArg.includes('[object')) {
+      profileName = profileArg.trim();
+    } else {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlProf = urlParams.get('profile');
+      if (urlProf && !urlProf.includes('[object') && urlProf !== 'null' && urlProf !== 'undefined') {
+        profileName = urlProf.trim();
+      }
+    }
+
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scopes}&state=${encodeURIComponent(profileName)}`;
     window.location.href = authUrl;
   }, []);
 

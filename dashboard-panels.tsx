@@ -1537,7 +1537,7 @@ export const TwitchSection: React.FC<TwitchSectionProps> = ({
           />
           <button
             type="button"
-            onClick={handleGetTwitchToken}
+            onClick={() => handleGetTwitchToken()}
             style={{ ...styles.button, backgroundColor: effPrimaryButtonBgColor, color: config.buttonTextColor, fontSize: '0.9rem', padding: '10px 14px', margin: 0, whiteSpace: 'nowrap' }}
             title={t('getTwitchToken')}
           >

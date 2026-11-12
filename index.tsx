@@ -1418,7 +1418,7 @@ const App = () => {
                       setCommandResponse={setCommandResponse}
                       handleAddCommand={handleAddCommand}
                       handleDeleteCommand={handleDeleteCommand}
-                      handleGetTwitchToken={handleGetTwitchToken}
+                      handleGetTwitchToken={() => handleGetTwitchToken(currentProfile)}
                       effHighlightColor={effHighlightColor}
                       effHeaderColor={effHeaderColor}
                       effSecondaryTextColor={effSecondaryTextColor}

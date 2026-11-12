@@ -140,15 +140,21 @@ export const getUrlProfile = () => {
   const urlProf = params.get('profile');
   if (urlProf) {
     try {
-      return decodeURIComponent(urlProf).trim() || 'default';
+      const decoded = decodeURIComponent(urlProf).trim();
+      if (decoded && !decoded.includes('[object') && decoded !== 'null' && decoded !== 'undefined') {
+        return decoded;
+      }
     } catch (e) {
-      return urlProf.trim() || 'default';
+      if (urlProf && !urlProf.includes('[object') && urlProf !== 'null' && urlProf !== 'undefined') {
+        return urlProf.trim();
+      }
     }
+    return 'default';
   }
   try {
     if (typeof localStorage !== 'undefined') {
       const last = localStorage.getItem(`${STORAGE_PREFIX}last_profile`);
-      if (last) return last;
+      if (last && !last.includes('[object') && last !== 'null' && last !== 'undefined') return last;
     }
   } catch (e) {}
   return 'default';

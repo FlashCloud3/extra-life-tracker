@@ -93,6 +93,21 @@ describe('Modular Core Utilities & Config', () => {
       saveStoredThemes(themes);
       expect(loadStoredThemes()).toEqual(themes);
     });
+
+    test('getUrlProfile sanitizes [object Object] and invalid profiles to default', () => {
+      delete global.window;
+      global.window = {
+        location: {
+          search: '?profile=%5Bobject%20Object%5D'
+        }
+      };
+      expect(getUrlProfile()).toBe('default');
+
+      global.window.location.search = '?profile=566273';
+      expect(getUrlProfile()).toBe('566273');
+
+      delete global.window;
+    });
   });
 
   describe('qr-code.js', () => {
@@ -742,6 +757,20 @@ describe('Modular Core Utilities & Config', () => {
       expect(indexContent).toContain('effProgressBarTextColor={effProgressBarTextColor}');
       expect(indexContent).toContain('effProgressBarBorderColor={effProgressBarBorderColor}');
       expect(indexContent).toContain('effSecondaryTextColor={effSecondaryTextColor}');
+    });
+
+    test('Twitch OAuth token flow protects dashboard URL and active profile from corruption', async () => {
+      const fs = await import('fs');
+      const hookContent = fs.readFileSync('hooks/use-twitch-integration.js', 'utf8');
+      expect(hookContent).toContain('!profileArg.includes(\'[object\')');
+      expect(hookContent).toContain('state.includes(\'[object\')');
+      expect(hookContent).toContain('window.history.replaceState(null, \'\', window.location.pathname + cleanSearch);');
+
+      const panelContent = fs.readFileSync('dashboard-panels.tsx', 'utf8');
+      expect(panelContent).toContain('onClick={() => handleGetTwitchToken()}');
+
+      const serverContent = fs.readFileSync('server.js', 'utf8');
+      expect(serverContent).toContain('profileId.includes(\'[object\')');
     });
   });
 });
